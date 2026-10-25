@@ -23,6 +23,8 @@ node --version
 
 如果你这套 Profile 还没安装它，先执行：
 
+**下面以宿主 `0.2.1-rc.2` 举例。若 `dsh --version` 显示 rc.1 或 rc.3，请把命令末尾的版本换成同一个版本，不要混装其他宿主版本的官方 Team Profile。**
+
 ```sh
 dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile@0.2.1-rc.2
 ```

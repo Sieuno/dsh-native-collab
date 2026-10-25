@@ -33,17 +33,15 @@ dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile@0.
 
 ## 2. 下载并检查安装包
 
-从本仓库 Releases 的 **v0.2.0 Assets** 下载：
+从本仓库 Releases 的 **v0.2.0 Assets** 下载 `dsh-native-collab-derived-0.2.0.tgz` 即可，无需另下说明文件或源码。
 
-- `dsh-native-collab-derived-0.2.0.tgz`：真正的安装包。
-- `SHA256SUMS.txt`：下载文件的校验清单。
-- `START-HERE.md`：随发行物提供的简明入口。
+如需校验，v0.2.0 安装包的 SHA-256 为：
 
-TGZ 的 SHA-256 以同一版 Release 附件 `SHA256SUMS.txt` 为准。最终包更新了兼容声明和文档，不能沿用原外测包的旧哈希。
+```text
+28c2bd40f8768d9022c166e65c2b3329e9e51d2381230dacd29e83a3a82e144b
+```
 
-Linux 可以用 `sha256sum 文件名`，macOS 用 `shasum -a 256 文件名`，PowerShell 用 `Get-FileHash 文件名 -Algorithm SHA256`；把结果与清单比对。如果只下载了 TGZ，不必要求清单中的其他文件也存在。
-
-Source code ZIP 和本项目的源码 ZIP 都是给开发者看的，**不是**这里要安装的 TGZ。
+GitHub 自动提供的 Source code ZIP 是源码，**不是**安装包。
 
 ## 3. 安装到同一套 Profile
 

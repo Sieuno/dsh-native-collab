@@ -2,11 +2,13 @@
 
 让 DSH 的 Agent Team 更灵活：灵活选择模型，增强父子对话通信。
 
+Flexible Agent Teams and model selection for DSH, with enhanced communication between parent and child conversations.
+
 这是基于 DeepSeek Harness 原生协作模块修改的**非官方社区插件**，不是 DeepSeek 官方发行版，也不是另一个聊天客户端。
 
 **当前版本：0.2.0，社区预发布。预期兼容 DSH 0.2.1 系列，从 `0.2.1-rc.1` 起。**
 
-[安装与使用](docs/INSTALL.md) · [常见问题](docs/FAQ.md) · [测试情况](TESTING.md) · [版本说明](RELEASE.md) · [开发说明](CONTRIBUTING.md)
+[English introduction](README.en.md) · [安装与使用](docs/INSTALL.md) · [常见问题](docs/FAQ.md) · [测试情况](TESTING.md) · [版本说明](RELEASE.md) · [开发说明](CONTRIBUTING.md)
 
 ## 它解决什么问题
 

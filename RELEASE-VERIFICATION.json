@@ -102,16 +102,20 @@
       "sha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be"
     },
     "PLUGIN-INTRODUCTION.md": {
-      "bytes": 1124,
-      "sha256": "a8bbb6729329b42eb4b3ad577d8ec7cbe3eecb781029b5d818e95b8f4cd77dc9"
+      "bytes": 1243,
+      "sha256": "7af096d0201ef1036661bf80bcaf03b04425e11fa0f86efff1e41709e84247f8"
     },
     "PUBLISHING.md": {
       "bytes": 1901,
       "sha256": "f155ea74226d1c588d4e4a4bc56c16abf460ce2456d034539c6de00ce8df7b36"
     },
+    "README.en.md": {
+      "bytes": 3259,
+      "sha256": "32a6219c4a92ef0480449f07828001cdd87c91465314d8e8710f3e51484e27d7"
+    },
     "README.md": {
-      "bytes": 6009,
-      "sha256": "754f90423ce41d772288a1bf55098c990aaeaf91bc8a2d03b5f7a12e17f82480"
+      "bytes": 6168,
+      "sha256": "0ad911ae6047707572a96718bc21b6f81f004615c584a1556aa17d0dcd2ff1d6"
     },
     "RELEASE.md": {
       "bytes": 1977,
@@ -466,8 +470,8 @@
       "sha256": "ad82b2a453dc602dc3d0cbf20fceecec3ddb3cecf93b28fed29c37e81b8d7000"
     },
     "package.json": {
-      "bytes": 7963,
-      "sha256": "7021cf147f6b2477156fc3bdb62f8d150c08e843a894164292d0ada6dfd11430"
+      "bytes": 8111,
+      "sha256": "244d3ce746c038fd6a77413d3b3dd233bc80634d83bf509aa2cc2fc1d109e28e"
     },
     "packages/agent-team/LICENSE": {
       "bytes": 1065,

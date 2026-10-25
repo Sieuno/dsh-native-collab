@@ -2,7 +2,7 @@
   "name": "@dsh-native-collab/derived",
   "version": "0.2.0",
   "private": true,
-  "description": "Flexible Agent Teams, model selection and enhanced parent-child communication for DeepSeek Harness. Unofficial community plugin.",
+  "description": "Flexible Agent Teams and model selection for DSH, with enhanced communication between parent and child conversations. 让 DSH 的 Agent Team 更灵活：灵活选择模型，增强父子对话通信。 Unofficial community plugin / 非官方社区插件。",
   "icon": "./icons/subagent.svg",
   "type": "module",
   "license": "MIT",
@@ -50,7 +50,8 @@
     "docs/**/*.json",
     "docs/images/*.png",
     "examples/*.yml",
-    ".github/examples/verify.yml"
+    ".github/examples/verify.yml",
+    "README.en.md"
   ],
   "exports": {
     ".": "./dist/agent-team/bootstrap.js",

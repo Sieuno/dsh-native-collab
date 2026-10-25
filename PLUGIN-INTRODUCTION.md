@@ -1,6 +1,8 @@
 # DSH Native Collab · 原生协作增强
 
-**让 DSH 的 Agent Team 更灵活：灵活选择模型，增强父子对话通信。**
+**让 DSH 的 Agent Team 更灵活：灵活选择模型，增强父子对话通信。
+
+Flexible Agent Teams and model selection for DSH, with enhanced communication between parent and child conversations.**
 
 这是基于 DSH 原生协作模块派生的非官方社区插件，不是一个集中管理任务的调度面板。
 

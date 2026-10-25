@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "子智能体列表工具",
+    "description": "查看当前 Lead 与持久化 Agent Team 成员。启用此派生行会替换原生 tool-subagent-list-agents，不会同时加载。"
+  }
+}

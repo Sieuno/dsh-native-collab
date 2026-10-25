@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Subagent Control Tools",
+    "description": "Send messages to agents and interrupt a running teammate turn. Enabling this derived row replaces native tool-subagent-control; both are not loaded."
+  }
+}

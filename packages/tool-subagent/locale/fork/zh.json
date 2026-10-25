@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "派生 Subagent Fork 工具",
+    "description": "Fork 委托。不拥有模型发现。省略时继承父路由。"
+  }
+}

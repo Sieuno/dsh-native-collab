@@ -1,0 +1,241 @@
+{
+  "name": "@dsh-native-collab/derived",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Flexible Agent Teams, model selection and enhanced parent-child communication for DeepSeek Harness. Unofficial community plugin.",
+  "icon": "./icons/subagent.svg",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0",
+    "dsh": ">=0.2.1-rc.1 <0.2.2-0"
+  },
+  "files": [
+    "dist/**/*.js",
+    "locale/*.json",
+    "packages/agent-team/locale/*.json",
+    "packages/agent-team/LICENSE",
+    "packages/subagent/locale/*.json",
+    "packages/subagent/LICENSE",
+    "packages/subagent/NOTICE",
+    "packages/tool-agent-team/locale/*.json",
+    "packages/tool-agent-team/LICENSE",
+    "packages/tool-subagent-control/locale/*.json",
+    "packages/tool-subagent-control/locale/list-agents/*.json",
+    "packages/tool-subagent-control/LICENSE",
+    "packages/tool-subagent-control/NOTICE",
+    "packages/tool-subagent/locale/*.json",
+    "packages/tool-subagent/locale/fork/*.json",
+    "packages/tool-subagent/LICENSE",
+    "scripts/check-release.mjs",
+    "scripts/make-overlays.mjs",
+    "cordis.patch.yml",
+    "icons/*.svg",
+    "README.md",
+    "TESTING.md",
+    "COVERAGE.md",
+    "UPSTREAM.md",
+    "THIRD_PARTY_NOTICES.md",
+    "CHANGELOG.md",
+    "RELEASE.md",
+    "CHANGE-MAP.md",
+    "HANDOFF.md",
+    "LICENSE",
+    ".gitignore",
+    "PLUGIN-INTRODUCTION.md",
+    "PUBLISHING.md",
+    "CONTRIBUTING.md",
+    "RELEASE-VERIFICATION.json",
+    "docs/**/*.md",
+    "docs/**/*.json",
+    "docs/images/*.png",
+    "examples/*.yml",
+    ".github/examples/verify.yml"
+  ],
+  "exports": {
+    ".": "./dist/agent-team/bootstrap.js",
+    "./client": "./dist/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./agent-team": "./dist/agent-team/index.js",
+    "./subagent": "./dist/subagent/index.js",
+    "./subagent/internal": "./dist/subagent/internal.js",
+    "./tool-agent-team": "./dist/tool-agent-team/index.js",
+    "./tool-subagent-control": "./dist/tool-subagent-control/index.js",
+    "./tool-subagent-control/list-agents": "./dist/tool-subagent-control/list-agents.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icons/subagent.svg",
+    "./agent-team/locale/*.json": "./packages/agent-team/locale/*.json",
+    "./agent-team/icon": "./icons/agent-team.svg",
+    "./subagent/locale/*.json": "./packages/subagent/locale/*.json",
+    "./subagent/icon": "./icons/subagent.svg",
+    "./tool-agent-team/locale/*.json": "./packages/tool-agent-team/locale/*.json",
+    "./tool-agent-team/icon": "./icons/tool-agent-team.svg",
+    "./tool-subagent-control/locale/*.json": "./packages/tool-subagent-control/locale/*.json",
+    "./tool-subagent-control/icon": "./icons/tool-subagent-control.svg",
+    "./tool-subagent-control/list-agents/locale/*.json": "./packages/tool-subagent-control/locale/list-agents/*.json",
+    "./tool-subagent-control/list-agents/icon": "./icons/tool-subagent-list-agents.svg",
+    "./tool-subagent": "./dist/tool-subagent/index.js",
+    "./tool-subagent/locale/*.json": "./packages/tool-subagent/locale/*.json",
+    "./tool-subagent/icon": "./icons/tool-subagent.svg",
+    "./tool-subagent/fork": "./dist/tool-subagent/fork.js",
+    "./tool-subagent/fork/locale/*.json": "./packages/tool-subagent/locale/fork/*.json",
+    "./tool-subagent/fork/icon": "./icons/tool-subagent-fork.svg",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ]
+    }
+  },
+  "scripts": {
+    "check": "node scripts/check-release.mjs",
+    "validate:package": "node scripts/check-release.mjs",
+    "pack:dry": "npm pack --dry-run"
+  },
+  "dependencies": {
+    "zod": "4.4.3",
+    "yaml": "2.9.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/dsh-app-boot": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-atomic-write": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-agent": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-agent-preset-registry": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-attachment": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-brand": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-chunked-list": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-llm": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-permission-presets": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-sandbox": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-sandbox-policy": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-scope": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-session": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-session-persistence": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-session-projection": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-session-query": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-subagent": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-storage": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-storage-domain": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-system-prompt": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-tools": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-typert-protocol": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-util-time": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-util-values": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-workspace": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/dsh-working-directory": ">=0.2.1-rc.1 <0.2.2-0",
+    "@deepseek-ai/schemastery": "3.18.5"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-app-boot": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-atomic-write": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-agent": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-agent-preset-registry": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-attachment": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-brand": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-chunked-list": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-permission-presets": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-sandbox": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-sandbox-policy": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-scope": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-session": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-session-persistence": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-session-projection": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-session-query": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-subagent": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-storage": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-storage-domain": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-system-prompt": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-typert-protocol": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-util-time": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-util-values": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-workspace": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-working-directory": {
+      "optional": true
+    },
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sieuno/dsh-native-collab.git"
+  },
+  "homepage": "https://github.com/Sieuno/dsh-native-collab#readme",
+  "bugs": {
+    "url": "https://github.com/Sieuno/dsh-native-collab/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "agent-team",
+    "subagent"
+  ]
+}

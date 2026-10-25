@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Subagent Runtime",
+    "description": "Manage continuable child agents through the host subagent service. Enabling this derived row replaces native subagent; both are not loaded."
+  }
+}

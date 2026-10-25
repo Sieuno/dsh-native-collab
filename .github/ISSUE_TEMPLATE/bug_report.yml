@@ -1,0 +1,32 @@
+name: 使用问题
+description: 安装、切换、设置或卸载遇到问题
+title: "[问题] "
+body:
+  - type: markdown
+    attributes:
+      value: "先查看安装说明和常见问题。不要上传 API key、浏览器 token、整套 Profile 或私人会话。"
+  - type: input
+    id: versions
+    attributes:
+      label: 版本
+      description: DSH、Node、插件版本，以及系统
+      placeholder: "DSH 0.2.1-rc.2 / Node 22.23.4 / 插件 0.2.0 / 系统"
+    validations:
+      required: true
+  - type: input
+    id: profile
+    attributes:
+      label: 使用哪套配置？
+      description: Web 默认或自定义 Profile；是否装了官方 Team Profile；HMR 是否关闭。不需要私人目录。
+  - type: textarea
+    id: steps
+    attributes:
+      label: 怎么遇到的？
+      description: 写出操作步骤、预期结果和实际结果。
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: 错误码或截图
+      description: 请先遮住凭据、访问 token、会话内容和私人路径。

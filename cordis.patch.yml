@@ -1,0 +1,27 @@
+# Safe default: activate only the read-only UI anchor; collaboration runtime rows remain disabled.
+# Native DSH rows remain untouched. This patch list does not replace user/profile config.
+- insert:
+    - id: "dsh-native-collab-ui"
+      name: "@dsh-native-collab/derived"
+      disabled: false
+    - id: "dsh-native-collab-subagent"
+      name: "@dsh-native-collab/derived/subagent"
+      disabled: true
+    - id: "dsh-native-collab-tool-subagent-control"
+      name: "@dsh-native-collab/derived/tool-subagent-control"
+      disabled: true
+    - id: "dsh-native-collab-tool-subagent-list-agents"
+      name: "@dsh-native-collab/derived/tool-subagent-control/list-agents"
+      disabled: true
+    - id: "dsh-native-collab-agent-team"
+      name: "@dsh-native-collab/derived/agent-team"
+      disabled: true
+    - id: "dsh-native-collab-tool-agent-team"
+      name: "@dsh-native-collab/derived/tool-agent-team"
+      disabled: true
+    - id: "dsh-native-collab-tool-subagent"
+      name: "@dsh-native-collab/derived/tool-subagent"
+      disabled: true
+    - id: "dsh-native-collab-tool-subagent-fork"
+      name: "@dsh-native-collab/derived/tool-subagent/fork"
+      disabled: true

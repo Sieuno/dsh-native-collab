@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-26",
+  "scope": "installation, Host startup, enable/restart, inventory, restore, official remove and restart; no models, no GUI",
+  "results": [
+    {
+      "version": "0.2.1-rc.3",
+      "pass": true,
+      "node": "v26.12.1",
+      "scope": "final package installation, Host startup, enable/apply/restart, inventory, restore, official remove and restart; no models or GUI"
+    },
+    {
+      "version": "0.2.1-rc.1",
+      "pass": true,
+      "node": "v26.12.1",
+      "scope": "final package installation, Host startup, enable/apply/restart, inventory, restore, official remove and restart; no models or GUI"
+    },
+    {
+      "version": "0.2.1-rc.2",
+      "pass": true,
+      "node": "v26.12.1",
+      "scope": "final package installation, Host startup, enable/apply/restart, inventory, restore, official remove and restart; no models or GUI"
+    }
+  ]
+}

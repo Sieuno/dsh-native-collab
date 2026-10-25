@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Derived Subagent Fork Tool",
+    "description": "Fork delegation. Does not own model discovery. Omission inherits the parent route."
+  }
+}

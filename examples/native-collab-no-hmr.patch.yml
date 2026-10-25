@@ -1,0 +1,3 @@
+# 本文件只关闭 DSH 热重载，不修改协作组件，也不替代用户原来的 patch。
+- id: hmr
+  disabled: true

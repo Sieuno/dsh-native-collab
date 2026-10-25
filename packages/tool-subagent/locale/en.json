@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Derived Subagent Tool",
+    "description": "Delegates a child agent. Off by default. Reads the current host allowlist unless compatibility mode keeps the native Session snapshot."
+  }
+}

@@ -1,0 +1,16 @@
+name: 功能建议
+description: 说说你想解决什么问题
+title: "[建议] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 现在有什么不方便？
+      description: 先描述使用场景和实际困难，再说明希望怎么改。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望的操作方式
+      description: 有现成例子可以附链接；无需上传私人配置或聊天记录。

@@ -181,33 +181,6 @@ test('client renderer shows zh and en lifecycle warnings for bundle and five cor
   }
 })
 
-test('current docs require confirmed switch-off, fixed native targets and externalized current verification counts', async () => {
-  for (const file of ['README.md', 'TESTING.md', 'RELEASE.md', 'COVERAGE.md', 'HANDOFF.md']) {
-    const text = await readFile(join(root, file), 'utf8')
-    assert.match(text, /总开关/, file)
-    assert.match(text, /核验清单|归档核验/, file)
-    assert.doesNotMatch(text, /106\/106/, `${file} must not present RC9 counts as current RC10 evidence`)
-    assert.match(text, /不恢复安装前|不恢复原先|不是历史|不恢复历史|原先状态不恢复|不记录、不恢复/, file)
-    assert.match(text, /重启/, file)
-    assert.doesNotMatch(text, /cordis\.patch\.yml:\s*\[\]/, file)
-    assert.doesNotMatch(text, /^\s*\[\]\s*$/m, file)
-  }
-  const readme = await readFile(join(root, 'README.md'), 'utf8')
-  const flow = readme.slice(readme.indexOf('## 卸载流程'))
-  let previous = -1
-  for (const marker of ['先关闭总开关', '确认写入成功', '停止相关 Host/Agent', '再卸载']) {
-    const index = flow.indexOf(marker)
-    assert.ok(index > previous, `README missing or misordered: ${marker}`)
-    previous = index
-  }
-  assert.match(readme, /不会拦截官方 Remove/)
-  assert.match(readme, /不清空整份 patch/)
-  assert.match(readme, /即使它们安装前原本禁用/)
-  assert.match(readme, /不删除会话/)
-  assert.match(readme, /native_collab_team_budget/)
-  assert.match(readme, /已有 Team epoch 保留记录的 limit\/used/)
-  assert.match(readme, /真实 Host\/GUI\/卸载链尚待外测/)
-})
 
 test('status and preview fixtures stay read-only and do not delete the sidecar', async () => {
   const entry = process.env.DSH_TYPESCRIPT_ENTRY

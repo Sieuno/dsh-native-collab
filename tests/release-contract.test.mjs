@@ -18,8 +18,10 @@ test('release metadata is pinned and guarded from npm publish', () => {
 })
 test('staging package metadata adds only packaging controls while preserving runtime identity', async () => {
   assert.equal(pkg.scripts['validate:package'], 'node scripts/check-release.mjs')
-  assert.ok(pkg.files.includes('TESTING.md'))
-  assert.ok(pkg.files.includes('COVERAGE.md'))
+  assert.ok(pkg.files.includes('docs/INSTALL.md'))
+  assert.ok(pkg.files.includes('docs/FAQ.md'))
+  assert.ok(!pkg.files.includes('TESTING.md'))
+  assert.ok(!pkg.files.includes('HANDOFF.md'))
   assert.ok(!pkg.files.includes('.npmrc'))
   const npmrc = (await readFile(join(root, '.npmrc'), 'utf8')).trim().split(/\r?\n/)
   assert.deepEqual(npmrc, ['auto-install-peers=false', 'verify-deps-before-run=false', 'ignore-scripts=true'])

@@ -21,7 +21,7 @@ if (pkg.dependencies?.zod !== '4.4.3' || pkg.dependencies?.['@deepseek-ai/schema
 if (pkg.devDependencies?.typescript !== '5.9.3') issues.push('typescript source-build dependency missing')
 if (pkg.dsh?.bundle?.patch !== './cordis.patch.yml') issues.push('dsh.bundle.patch must point to ./cordis.patch.yml')
 if (pkg.scripts?.['validate:package'] !== 'node scripts/check-release.mjs') issues.push('validate:package must be a direct Node-only package check')
-for (const doc of ['TESTING.md', 'COVERAGE.md', 'PLUGIN-INTRODUCTION.md', 'PUBLISHING.md']) if (!(pkg.files ?? []).includes(doc)) issues.push(`${doc} must be included in the package files whitelist`)
+for (const doc of ['README.md', 'README.en.md', 'docs/INSTALL.md', 'docs/FAQ.md', 'LICENSE']) if (!(pkg.files ?? []).includes(doc)) issues.push(`${doc} must be included in the package files whitelist`)
 if ((pkg.files ?? []).includes('.npmrc')) issues.push('.npmrc must remain source-project-only, not a runtime package file')
 if (pkg.exports?.['.'] !== './dist/agent-team/bootstrap.js') issues.push('root export must point to the UI-only bootstrap')
 if (pkg.exports?.['./client'] !== './dist/client.js') issues.push('client subpath export must point to the browser entry')
@@ -92,7 +92,7 @@ const candidates = [
   ...(await walk(join(root, 'icons'))),
   ...(await walk(join(root, 'locale'))),
   ...(await walk(join(root, 'packages'))).filter(file => /[\\/]packages[\\/][^\\/]+[\\/](?:src|locale)[\\/]/.test(file)),
-  ...['package.json', 'cordis.patch.yml', 'README.md', 'TESTING.md', 'COVERAGE.md', 'UPSTREAM.md', 'THIRD_PARTY_NOTICES.md', 'CHANGELOG.md', 'RELEASE.md', 'CHANGE-MAP.md', 'HANDOFF.md', 'PLUGIN-INTRODUCTION.md', 'PUBLISHING.md', 'LICENSE'].map(file => join(root, file)),
+  ...['package.json', 'cordis.patch.yml', 'README.md', 'README.en.md', 'TESTING.md', 'UPSTREAM.md', 'THIRD_PARTY_NOTICES.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'docs/INSTALL.md', 'docs/FAQ.md', 'LICENSE'].map(file => join(root, file)),
 ]
 const forbidden = [
   /\b[A-Z]:[\\/][^\r\n"'`<>|?*]*/i,

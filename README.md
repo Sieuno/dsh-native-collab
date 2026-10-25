@@ -8,11 +8,9 @@ Flexible Agent Teams and model selection for DSH, with enhanced communication be
 
 **当前版本：0.2.0，社区预发布。预期兼容 DSH 0.2.1 系列，从 `0.2.1-rc.1` 起。**
 
-[English introduction](README.en.md) · [安装与使用](docs/INSTALL.md) · [常见问题](docs/FAQ.md) · [测试情况](TESTING.md) · [版本说明](RELEASE.md) · [开发说明](CONTRIBUTING.md)
+[English](README.en.md) · [安装与使用](docs/INSTALL.md) · [常见问题](docs/FAQ.md) · [更新日志](CHANGELOG.md)
 
 ## 它解决什么问题
-
-重点是更灵活的 Team、灵活选择模型，以及增强父子对话通信。设置页和请求配额是配套能力，不是任务调度管理平台。
 
 - **灵活选择模型**：可以保留原生的模型选择快照，也可以按当前宿主允许的模型列表选择。
 - **增强父子对话通信**：支持运行中引导、完成后续聊，仍受原有权限和会话规则约束。
@@ -75,18 +73,16 @@ dsh plugin --profile web remove @dsh-native-collab/derived
 
 如果关闭被阻止，先看[排错说明](docs/FAQ.md)，不要跳过这一步强行卸载。
 
-## 这版测到什么程度
+## 兼容性与已知问题
 
-0.2.0 已在隔离环境完成安装、启用、重启、设置保存、升级和正常卸载；覆盖中英文、窄窗口、200% 缩放与键盘确认/取消。测试使用模拟模型服务，没有真实或付费模型调用。
+支持范围：`>=0.2.1-rc.1 <0.2.2-0`，Node `>=22.19.0`。已验证 DSH rc.1、rc.2、rc.3 的安装与启停流程；rc.2 另有完整功能与界面测试。
 
-已知小问题：确认表里的长操作名有时需要横向滚动才能看全，确认/取消按钮仍可用。这是已接受的外观限制，不影响本次预发布。
+窄窗口下，确认表里的长操作名可能需要横向滚动查看。
 
-完整外测版本是 DSH 0.2.1-rc.2；rc.1/rc.3 已核对相关源码，并通过隔离安装、启用/重启和关闭卸载检查。其他同系列版本属于预期兼容，不冒称逐版实测。详细范围见[测试说明](TESTING.md)和[核验清单](RELEASE-VERIFICATION.json)。
+开发者可查看[开发与测试说明](https://github.com/Sieuno/dsh-native-collab/blob/main/CONTRIBUTING.md)。
 
 ## 来源与许可
 
 基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 `dsh-v0.2.1-rc.2` 派生，遵循 [MIT 许可](LICENSE)，保留上游版权和 NOTICE。详见[来源](UPSTREAM.md)与[第三方声明](THIRD_PARTY_NOTICES.md)。
-
-安装文档按[官方打包教程](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.1-rc.2/docs/user/develop/basic/publish.zh.md)核对，分发形式参考社区插件 [dsh-billing](https://github.com/Wanbinyu/dsh-billing) 和 [git-inspect](https://github.com/Wanbinyu/dsh-plugin-git-inspect)。这些项目不是本插件的背书方。
 
 [下载 v0.2.0](https://github.com/Sieuno/dsh-native-collab/releases/tag/v0.2.0) · [反馈问题](https://github.com/Sieuno/dsh-native-collab/issues)

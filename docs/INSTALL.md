@@ -45,12 +45,6 @@ dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile@0.
 dsh plugin --profile web add @sieuno/dsh-native-collab
 ```
 
-若已下载 TGZ，在文件所在目录执行：
-
-```sh
-dsh plugin --profile web add ./sieuno-dsh-native-collab-0.2.1.tgz
-```
-
 以上命令同样可用于 Windows PowerShell。已有旧版 0.2.0 安装时，请先按文末升级步骤移除旧包，不能直接叠装。
 
 首次安装只登记这个组合包：管理入口默认开启，七个派生功能/占位行默认关闭，不会立刻替换原生组件。请通过 `dsh plugin` 或 DSH 的插件管理页安装，不要在任意目录执行 `npm install` 代替 Profile 安装。

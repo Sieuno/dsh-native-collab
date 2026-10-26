@@ -6,6 +6,14 @@
 
 An unofficial community plugin derived from DeepSeek Harness native collaboration modules. It is not an official DeepSeek release.
 
+## Startup overrides and switching back
+
+**This plugin uses startup configuration overrides to switch selected official collaboration components and tools within Agent presets to this project's enhanced implementations.** It does not modify the official DSH installation files. Installation alone does not switch components: review and confirm the plugin's own master switch, then fully restart.
+
+**To return to the official native collaboration components, turn off this plugin's own master switch, confirm the save, and fully restart.** Disabling an individual row in DSH's plugin manager or directly removing the package is not this restore procedure.
+
+This returns to a fixed native baseline, not the complete pre-install configuration. Five native root components are enabled, including any previously disabled ones; copied presets and existing Team usage records remain. See the uninstall notes below.
+
 ## What it adds
 
 - More flexible Team collaboration and model selection, within the host's allowed model roster.

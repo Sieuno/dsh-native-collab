@@ -10,20 +10,20 @@ import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..')
 const clientPath = join(root, 'dist', 'client.js')
-const PACKAGE = '@dsh-native-collab/derived'
+const PACKAGE = '@sieuno/dsh-native-collab'
 const CORES = [
-  { key: 'subagent', nativeId: 'subagent', derivedId: 'dsh-native-collab-subagent', moduleName: '@dsh-native-collab/derived/subagent' },
-  { key: 'control', nativeId: 'tool-subagent-control', derivedId: 'dsh-native-collab-tool-subagent-control', moduleName: '@dsh-native-collab/derived/tool-subagent-control' },
-  { key: 'listAgents', nativeId: 'tool-subagent-list-agents', derivedId: 'dsh-native-collab-tool-subagent-list-agents', moduleName: '@dsh-native-collab/derived/tool-subagent-control/list-agents' },
-  { key: 'agentTeam', nativeId: 'agent-team', derivedId: 'dsh-native-collab-agent-team', moduleName: '@dsh-native-collab/derived/agent-team' },
-  { key: 'teamTools', nativeId: 'tool-agent-team', derivedId: 'dsh-native-collab-tool-agent-team', moduleName: '@dsh-native-collab/derived/tool-agent-team' },
+  { key: 'subagent', nativeId: 'subagent', derivedId: 'dsh-native-collab-subagent', moduleName: '@sieuno/dsh-native-collab/subagent' },
+  { key: 'control', nativeId: 'tool-subagent-control', derivedId: 'dsh-native-collab-tool-subagent-control', moduleName: '@sieuno/dsh-native-collab/tool-subagent-control' },
+  { key: 'listAgents', nativeId: 'tool-subagent-list-agents', derivedId: 'dsh-native-collab-tool-subagent-list-agents', moduleName: '@sieuno/dsh-native-collab/tool-subagent-control/list-agents' },
+  { key: 'agentTeam', nativeId: 'agent-team', derivedId: 'dsh-native-collab-agent-team', moduleName: '@sieuno/dsh-native-collab/agent-team' },
+  { key: 'teamTools', nativeId: 'tool-agent-team', derivedId: 'dsh-native-collab-tool-agent-team', moduleName: '@sieuno/dsh-native-collab/tool-agent-team' },
 ]
 const DOC_MARKERS = [
   '先停该 Profile 相关的 Host 与 Agent',
   '备份当前配置，并对照启用前备份',
   '只撤本插件引入的各层启用覆盖',
   '原生服务不再被这些覆盖关闭',
-  'dsh plugin --profile <p> remove @dsh-native-collab/derived',
+  'dsh plugin --profile <p> remove @sieuno/dsh-native-collab',
   'S0 安装前会话',
 ]
 
@@ -116,8 +116,8 @@ test('client renderer shows zh and en lifecycle warnings for bundle and five cor
     'plugins.bundle.config', 'plugins.detail.badge', 'plugins.detail.section',
     'plugins.row.config', 'plugins.bundle.activation',
   ])
-  assert.equal(plugin.registrations[3].contract.key, '@dsh-native-collab/derived#dsh-native-collab-ui')
-  assert.equal(plugin.registrations[4].contract.key, '@dsh-native-collab/derived')
+  assert.equal(plugin.registrations[3].contract.key, '@sieuno/dsh-native-collab#dsh-native-collab-ui')
+  assert.equal(plugin.registrations[4].contract.key, '@sieuno/dsh-native-collab')
   assert.equal(plugin.registrations.filter(entry => entry.contract.name === 'plugins.row.config').length, 1)
   const badge = plugin.registrations[1].component
   const section = plugin.registrations[2].component
@@ -169,8 +169,8 @@ test('client renderer shows zh and en lifecycle warnings for bundle and five cor
       null,
       { kind: 'item', id: 'unrelated' },
       { kind: 'bundle', pkg: { name: '@other/pkg' } },
-      rowSubject('dsh-native-collab-tool-subagent', '@dsh-native-collab/derived/tool-subagent'),
-      rowSubject('dsh-native-collab-tool-subagent-fork', '@dsh-native-collab/derived/tool-subagent/fork'),
+      rowSubject('dsh-native-collab-tool-subagent', '@sieuno/dsh-native-collab/tool-subagent'),
+      rowSubject('dsh-native-collab-tool-subagent-fork', '@sieuno/dsh-native-collab/tool-subagent/fork'),
       rowSubject('tool-subagent', '@deepseek-ai/dsh-tool-subagent', '@deepseek-ai/dsh-tool-subagent'),
       rowSubject('tool-subagent-fork', '@deepseek-ai/dsh-tool-subagent-fork', '@deepseek-ai/dsh-tool-subagent'),
       rowSubject('workflow', '@other/workflow', '@other/workflow'),
@@ -213,13 +213,13 @@ test('status and preview fixtures stay read-only and do not delete the sidecar',
       async listPlugins() {
         called.push('listPlugins')
         return [
-          { moduleName: '@dsh-native-collab/derived/subagent', enabled: false },
-          { moduleName: '@dsh-native-collab/derived/tool-subagent-control', enabled: true },
-          { moduleName: '@dsh-native-collab/derived/tool-subagent-control/list-agents', enabled: false },
-          { moduleName: '@dsh-native-collab/derived/agent-team', enabled: false },
-          { moduleName: '@dsh-native-collab/derived/tool-agent-team', enabled: true },
-          { moduleName: '@dsh-native-collab/derived/tool-subagent', enabled: false },
-          { moduleName: '@dsh-native-collab/derived/tool-subagent/fork', enabled: false },
+          { moduleName: '@sieuno/dsh-native-collab/subagent', enabled: false },
+          { moduleName: '@sieuno/dsh-native-collab/tool-subagent-control', enabled: true },
+          { moduleName: '@sieuno/dsh-native-collab/tool-subagent-control/list-agents', enabled: false },
+          { moduleName: '@sieuno/dsh-native-collab/agent-team', enabled: false },
+          { moduleName: '@sieuno/dsh-native-collab/tool-agent-team', enabled: true },
+          { moduleName: '@sieuno/dsh-native-collab/tool-subagent', enabled: false },
+          { moduleName: '@sieuno/dsh-native-collab/tool-subagent/fork', enabled: false },
         ]
       },
       setPluginEnabled() { called.push('setPluginEnabled'); throw new Error('setter') },

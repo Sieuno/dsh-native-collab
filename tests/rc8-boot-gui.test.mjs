@@ -38,7 +38,7 @@ async function harness(language, rejectApply = false) {
  const r = renderer(), calls = [], registrations = []
  const locale = actualLocale(language)
  const t = locale.bind('collabUi')
- const target = { scope: 'preset:standard', id: 'ordinary-create', moduleName: '@dsh-native-collab/derived/tool-subagent', operation: 'replace', previousModule: '@deepseek-ai/dsh-tool-subagent' }
+ const target = { scope: 'preset:standard', id: 'ordinary-create', moduleName: '@sieuno/dsh-native-collab/tool-subagent', operation: 'replace', previousModule: '@deepseek-ai/dsh-tool-subagent' }
  let spec
  runInNewContext(await readFile(new URL('../dist/client.js', import.meta.url), 'utf8'), { window: { __ModuleLoader__: { load(value) { spec = value } } } })
  const remote = { collabUi: {

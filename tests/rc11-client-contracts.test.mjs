@@ -54,7 +54,7 @@ async function runClient(language, { emitted = false, sameModule = false } = {})
     window: { __ModuleLoader__: { load(value) { spec = value } } },
   })
   const rows = ids.map((id, index) => ({
-    id, moduleName: `@dsh-native-collab/derived/${index}`, current: 'disabled',
+    id, moduleName: `@sieuno/dsh-native-collab/${index}`, current: 'disabled',
     sourceLayer: 'unknown', runtimePhase: placeholders.has(id) ? null : 'active',
   }))
   const remote = { collabUi: {

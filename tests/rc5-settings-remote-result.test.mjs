@@ -14,7 +14,7 @@ const root = join(import.meta.dirname, '..')
 const clientPath = join(root, 'dist', 'client.js')
 const distPath = join(root, 'dist', 'client.js')
 const ENTRY = 'dsh-native-collab-ui'
-const SLOT = '@dsh-native-collab/derived#dsh-native-collab-ui'
+const SLOT = '@sieuno/dsh-native-collab#dsh-native-collab-ui'
 
 function exactSchema() {
   return {

@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const packageName = '@dsh-native-collab/derived'
+const packageName = '@sieuno/dsh-native-collab'
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 const patchText = await readFile(join(root, 'cordis.patch.yml'), 'utf8')
 const officialRoot = process.env.DSH_OFFICIAL_SOURCE_ROOT

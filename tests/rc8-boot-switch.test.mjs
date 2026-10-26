@@ -68,7 +68,7 @@ function managerClass(atomicOverride = atomic) {
   return load(bootFile, { yaml, '@deepseek-ai/dsh-app-boot': { ...profile, ...profileContext, ...patches, ...compatibility, readProfileVersionExemptions() { return {} } }, '@deepseek-ai/dsh-atomic-write': atomicOverride }).BootSwitchManager
 }
 const BootSwitchManager = managerClass()
-const PACKAGE = '@dsh-native-collab/derived'
+const PACKAGE = '@sieuno/dsh-native-collab'
 const evidence = resolve(root, '../../reviews/rc9-fixes/lead/fixtures')
 const contract = JSON.parse(readFileSync(join(root, 'tests/fixtures/rc8-real-native-contract.json'), 'utf8'))
 const inserted = yaml.parse(readFileSync(join(root, 'cordis.patch.yml'), 'utf8'))[0].insert

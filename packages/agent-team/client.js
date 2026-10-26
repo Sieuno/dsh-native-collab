@@ -1,10 +1,10 @@
 window.__ModuleLoader__.load({
-  id: '@dsh-native-collab/derived',
+  id: '@sieuno/dsh-native-collab',
   factory(require) {
     const React = require('react')
     const { Button, Modal } = require('@deepseek-ai/dsh-client-ui-primitives')
     const h = React.createElement
-    const PACKAGE = '@dsh-native-collab/derived'
+    const PACKAGE = '@sieuno/dsh-native-collab'
     const LOCALE = 'collabUi'
     // Replaced from the packaged dictionaries by emit-dist; no network locale lookup.
     const UI_LOCALES = null

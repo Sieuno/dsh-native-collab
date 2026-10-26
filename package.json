@@ -1,7 +1,6 @@
 {
-  "name": "@dsh-native-collab/derived",
-  "version": "0.2.0",
-  "private": true,
+  "name": "@sieuno/dsh-native-collab",
+  "version": "0.2.1",
   "description": "Flexible Agent Teams and model selection for DSH, with enhanced communication between parent and child conversations. 让 DSH 的 Agent Team 更灵活：灵活选择模型，增强父子对话通信。 Unofficial community plugin / 非官方社区插件。",
   "icon": "./icons/subagent.svg",
   "type": "module",
@@ -227,5 +226,9 @@
     "deepseek-harness",
     "agent-team",
     "subagent"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }

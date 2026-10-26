@@ -27,15 +27,17 @@ This returns to a fixed native baseline, not the complete pre-install configurat
 
 Expected compatibility: `>=0.2.1-rc.1 <0.2.2-0` (DSH 0.2.1 series, starting at rc.1). The tested environment is recorded separately; a Profile name is not a compatibility restriction.
 
-Installation and lifecycle checks passed on rc.1, rc.2 and rc.3. rc.2 also received functional and UI acceptance testing with mock model services. Node >=22.19.0 is required.
+Node >=22.19.0 is required.
 
 ## Install
 
 Read the [installation guide (Chinese)](docs/INSTALL.md) first: back up your Profile, ensure the matching official experimental Agent Team profile is present, and disable HMR before using this plugin's master switch.
 
 ```sh
-dsh plugin --profile web add https://github.com/Sieuno/dsh-native-collab/releases/download/v0.2.0/dsh-native-collab-derived-0.2.0.tgz
+dsh plugin --profile web add @sieuno/dsh-native-collab
 ```
+
+Upgrading from 0.2.0? The previous package was `@dsh-native-collab/derived`. Use its own master switch to return to native components, confirm, stop the Host/Agents, then remove the old package before installing the new one. Do not install both package identities together. Future versions under the new name can update normally.
 
 Replace `web` with your Profile name. Installation only registers the management entry. Review and confirm the plugin's own master switch, stop the relevant Host/Agents, and fully restart the same Profile. Refreshing a browser tab is not a Host restart. Two ordinary-tool placeholder rows intentionally stay disabled; those tools operate inside presets.
 
@@ -46,11 +48,11 @@ Replace `web` with your Profile name. Installation only registers the management
 - Switch off and confirm success first, then stop the Host/Agents, then remove the bundle and restart. Official Remove does not perform the switch-off for you.
 
 ```sh
-dsh plugin --profile web remove @dsh-native-collab/derived
+dsh plugin --profile web remove @sieuno/dsh-native-collab
 ```
 
 Known cosmetic issue: long change labels may require horizontal scrolling at narrow widths or high zoom. Confirmation and cancellation controls remain reachable.
 
 ## Development and license
 
-See the [contributing guide](https://github.com/Sieuno/dsh-native-collab/blob/main/CONTRIBUTING.md) and [upstream attribution](UPSTREAM.md). MIT licensed; upstream DeepSeek copyright and package NOTICE files are retained. This release is distributed through GitHub, not npm.
+See the [contributing guide](https://github.com/Sieuno/dsh-native-collab/blob/main/CONTRIBUTING.md) and [upstream attribution](UPSTREAM.md). MIT licensed; upstream DeepSeek copyright and package NOTICE files are retained. The npm package is `@sieuno/dsh-native-collab`. The GitHub Release TGZ contains the same package and is also accepted by DSH on Windows; no separate installation ZIP is required.

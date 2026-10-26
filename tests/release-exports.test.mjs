@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const packageName = '@dsh-native-collab/derived'
+const packageName = '@sieuno/dsh-native-collab'
 const root = dirname(fileURLToPath(new URL('../package.json', import.meta.url)))
 const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 const modules = [
@@ -59,7 +59,7 @@ test('default patch activates only the bare UI anchor and keeps five feature row
   for (const [module, id] of modules.map(([module, id]) => [module, id])) {
     const entry = entries.find(([, actualId]) => actualId === id)
     assert.ok(entry, `patch row ${id}`)
-    assert.equal(entry[2], `@dsh-native-collab/derived/${module}`)
+    assert.equal(entry[2], `@sieuno/dsh-native-collab/${module}`)
     assert.equal(entry[3], 'true', `${id} must default disabled`)
   }
 })

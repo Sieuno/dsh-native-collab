@@ -1,0 +1,39 @@
+name: 打包并发布安装包
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: 核对版本标签
+        run: node -e 'const p=require("./package.json"); if(process.env.GITHUB_REF_NAME !== "v"+p.version) throw new Error("Tag must match package version");'
+      - name: 构建运行文件
+        run: node scripts/emit-dist.mjs
+      - name: 生成 TGZ 和发布说明
+        run: |
+          mkdir -p release-assets
+          npm pack --ignore-scripts --pack-destination release-assets
+          node --input-type=module -e 'import fs from "node:fs"; const p=JSON.parse(fs.readFileSync("package.json","utf8")); const text=fs.readFileSync("CHANGELOG.md","utf8"); const section=text.split("## "+p.version+"\n")[1]?.split("\n## ")[0]; if(!section) throw new Error("Missing changelog section"); const body="# DSH Native Collab "+p.version+"\n\n让 DSH 的 Agent Team 更灵活：灵活选择模型，增强父子对话通信。\n\nFlexible Agent Teams and model selection for DSH, with enhanced parent–child conversation communication.\n\n"+section.trim()+"\n\n安装 / Install:\n\n```sh\ndsh plugin --profile web add @sieuno/dsh-native-collab\n```\n\nWindows、macOS、Linux 使用同一个 TGZ，无需另下安装 ZIP。\n\n安装及旧版升级说明 / Installation and migration: https://github.com/Sieuno/dsh-native-collab/blob/"+process.env.GITHUB_REF_NAME+"/docs/INSTALL.md\n\n非官方社区插件，MIT 许可。\n"; fs.writeFileSync("release-notes.md",body);'
+      - name: 发布 GitHub Release（仅 TGZ）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --prerelease --title "DSH Native Collab ${GITHUB_REF_NAME#v}" --notes-file release-notes.md release-assets/*.tgz

@@ -78,7 +78,7 @@ function harness() {
 function row(id = 'dsh-native-collab-agent-team') {
   return {
     id,
-    moduleName: '@dsh-native-collab/derived/agent-team',
+    moduleName: '@sieuno/dsh-native-collab/agent-team',
     current: 'enabled',
     sourceLayer: 'unknown',
     runtimePhase: null,

@@ -5,7 +5,7 @@
  * There is no process-global copy. A missing control service is not an unset overlay.
  */
 /** Instance brand. It identifies the service; it is not a process-wide data slot. */
-export const COLLAB_UI_BRAND = Symbol.for('@dsh-native-collab/derived.collabUi');
+export const COLLAB_UI_BRAND = Symbol.for('@sieuno/dsh-native-collab.collabUi');
 const MISSING = 'collabUi assembly snapshot is required before collaboration consumers start';
 function flag(value) {
     return typeof value === 'boolean' ? value : undefined;

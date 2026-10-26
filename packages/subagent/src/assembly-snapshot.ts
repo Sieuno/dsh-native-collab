@@ -6,7 +6,7 @@
  */
 
 /** Instance brand. It identifies the service; it is not a process-wide data slot. */
-export const COLLAB_UI_BRAND = Symbol.for('@dsh-native-collab/derived.collabUi')
+export const COLLAB_UI_BRAND = Symbol.for('@sieuno/dsh-native-collab.collabUi')
 
 export interface AssemblySnapshot {
   readonly present: true

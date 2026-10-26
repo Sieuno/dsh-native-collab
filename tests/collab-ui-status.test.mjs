@@ -27,13 +27,13 @@ const ids = [
   'dsh-native-collab-tool-subagent-fork',
 ]
 const moduleNames = [
-  '@dsh-native-collab/derived/subagent',
-  '@dsh-native-collab/derived/tool-subagent-control',
-  '@dsh-native-collab/derived/tool-subagent-control/list-agents',
-  '@dsh-native-collab/derived/agent-team',
-  '@dsh-native-collab/derived/tool-agent-team',
-  '@dsh-native-collab/derived/tool-subagent',
-  '@dsh-native-collab/derived/tool-subagent/fork',
+  '@sieuno/dsh-native-collab/subagent',
+  '@sieuno/dsh-native-collab/tool-subagent-control',
+  '@sieuno/dsh-native-collab/tool-subagent-control/list-agents',
+  '@sieuno/dsh-native-collab/agent-team',
+  '@sieuno/dsh-native-collab/tool-agent-team',
+  '@sieuno/dsh-native-collab/tool-subagent',
+  '@sieuno/dsh-native-collab/tool-subagent/fork',
 ]
 function service(ctx) { return Object.assign(Object.create(CollabUiService.prototype), { ctx }) }
 

@@ -192,9 +192,9 @@ test('renderer keeps the original three slots and adds row config plus activatio
     'plugins.bundle.config', 'plugins.detail.badge', 'plugins.detail.section',
   ])
   assert.equal(registrations[3].contract.name, 'plugins.row.config')
-  assert.equal(registrations[3].contract.key, '@dsh-native-collab/derived#dsh-native-collab-ui')
+  assert.equal(registrations[3].contract.key, '@sieuno/dsh-native-collab#dsh-native-collab-ui')
   assert.equal(activation.contract.name, 'plugins.bundle.activation')
-  assert.equal(activation.contract.key, '@dsh-native-collab/derived')
+  assert.equal(activation.contract.key, '@sieuno/dsh-native-collab')
   for (const locale of [en, zh]) {
     const page = await renderSettings({ t: translator(locale), view: 'summary' })
     const summary = page.draw()
@@ -217,7 +217,7 @@ test('renderer modal cancel and details write nothing; unknown namespace writes 
         value: {
           writable: true,
           hasDocument: true,
-          namespaces: [{ ns: '@dsh-native-collab/derived#dsh-native-collab-ui', schema: exactSchema(), revision: 9 }],
+          namespaces: [{ ns: '@sieuno/dsh-native-collab#dsh-native-collab-ui', schema: exactSchema(), revision: 9 }],
         },
       }
     },
@@ -582,7 +582,7 @@ test('explicit delivery cannot bypass runtime admission and native send remains'
 
 test('service constructors freeze the startup snapshot and reject enhanced delivery', async () => {
   const harness = await bootTools()
-  const planted = Symbol.for('@dsh-native-collab/derived.assemblySnapshot')
+  const planted = Symbol.for('@sieuno/dsh-native-collab.assemblySnapshot')
   try {
     const ui = new bootstrap.default(harness.ctx, {
       modelEnhancement: true,

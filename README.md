@@ -6,7 +6,7 @@ Flexible Agent Teams and model selection for DSH, with enhanced communication be
 
 这是基于 DeepSeek Harness 原生协作模块修改的**非官方社区插件**，不是 DeepSeek 官方发行版，也不是另一个聊天客户端。
 
-**当前版本：0.2.0，社区预发布。预期兼容 DSH 0.2.1 系列，从 `0.2.1-rc.1` 起。**
+**当前版本：0.2.1，社区预发布。预期兼容 DSH 0.2.1 系列，从 `0.2.1-rc.1` 起。**
 
 [English](README.en.md) · [安装与使用](docs/INSTALL.md) · [常见问题](docs/FAQ.md) · [更新日志](CHANGELOG.md)
 
@@ -39,19 +39,15 @@ Flexible Agent Teams and model selection for DSH, with enhanced communication be
 
 先看[完整安装说明](docs/INSTALL.md)：它包含备份、原生 Team 组件准备，以及本插件要求的关闭热重载步骤。
 
-在版本和前提都符合后，从本仓库 **Releases → v0.2.0 → Assets** 下载 `dsh-native-collab-derived-0.2.0.tgz`。不要把 GitHub 自动生成的 Source code ZIP 当成安装包。
-
-可直接从本版 Release 安装（以下示例使用 `web`，名称不是兼容限制）：
+在版本和前提都符合后，直接按包名安装（`web` 换成你的 Profile 名称）：
 
 ```sh
-dsh plugin --profile web add https://github.com/Sieuno/dsh-native-collab/releases/download/v0.2.0/dsh-native-collab-derived-0.2.0.tgz
+dsh plugin --profile web add @sieuno/dsh-native-collab
 ```
 
-也可下载后进入文件所在目录安装：
+也可在 DSH 的“添加插件”页面输入 `@sieuno/dsh-native-collab`。GitHub Release 提供相同内容的 TGZ 安装包，Windows、macOS 和 Linux 均使用这一格式，不需要手工解压。Source code ZIP 不是安装包。
 
-```sh
-dsh plugin --profile web add ./dsh-native-collab-derived-0.2.0.tgz
-```
+**旧版 0.2.0 用户注意：**旧包名为 `@dsh-native-collab/derived`，与新包不是同一安装项。请先用旧插件自己的总开关切回原生、确认保存并停止相关 Host/Agent，再卸载旧包，然后安装新包。不要同时安装，完整步骤见[升级说明](docs/INSTALL.md#从旧版-020-升级)。以后新包的同名版本可以正常更新。
 
 然后按安装说明启动对应 Profile，在左侧“插件”里打开本插件，用**插件自己的总开关**查看变更并确认，再停止相关 Host/Agent、完整重启。
 
@@ -61,7 +57,7 @@ dsh plugin --profile web add ./dsh-native-collab-derived-0.2.0.tgz
 
 ![中文界面：五项派生组件运行，两个工具占位保持关闭](docs/images/components-zh.png)
 
-图为 0.2.0 隔离测试环境；请求上限 9 是测试设置，不是默认值。
+图中的请求上限 9 是示例设置，默认值为 32。
 
 在插件设置页分别保存模型、通信和请求上限偏好，然后完整重启该 Profile。界面会分开显示“已保存的偏好”和“启动时观察到的值”，两者不同通常表示还没重启。
 
@@ -76,14 +72,14 @@ dsh plugin --profile web add ./dsh-native-collab-derived-0.2.0.tgz
 卸载命令（以 `web` 为例）：
 
 ```sh
-dsh plugin --profile web remove @dsh-native-collab/derived
+dsh plugin --profile web remove @sieuno/dsh-native-collab
 ```
 
 如果关闭被阻止，先看[排错说明](docs/FAQ.md)，不要跳过这一步强行卸载。
 
 ## 兼容性与已知问题
 
-支持范围：`>=0.2.1-rc.1 <0.2.2-0`，Node `>=22.19.0`。已验证 DSH rc.1、rc.2、rc.3 的安装与启停流程；rc.2 另有完整功能与界面测试。
+适用 DSH `>=0.2.1-rc.1 <0.2.2-0`，需要 Node `>=22.19.0`。
 
 窄窗口下，确认表里的长操作名可能需要横向滚动查看。
 
@@ -93,4 +89,4 @@ dsh plugin --profile web remove @dsh-native-collab/derived
 
 基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 `dsh-v0.2.1-rc.2` 派生，遵循 [MIT 许可](LICENSE)，保留上游版权和 NOTICE。详见[来源](UPSTREAM.md)与[第三方声明](THIRD_PARTY_NOTICES.md)。
 
-[下载 v0.2.0](https://github.com/Sieuno/dsh-native-collab/releases/tag/v0.2.0) · [反馈问题](https://github.com/Sieuno/dsh-native-collab/issues)
+[下载 v0.2.1](https://github.com/Sieuno/dsh-native-collab/releases/tag/v0.2.1) · [反馈问题](https://github.com/Sieuno/dsh-native-collab/issues)

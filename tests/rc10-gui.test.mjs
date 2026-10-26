@@ -73,7 +73,7 @@ async function harness(language, options = {}) {
         warnings: options.warnings ?? STALE_ENABLE_WARNINGS,
         targets: options.targets ?? [
           { scope: 'preset:native', id: 'tool-subagent', moduleName: '@deepseek-ai/dsh-tool-subagent', previousModule: '@deepseek-ai/dsh-tool-subagent', operation: 'replace' },
-          { scope: 'root', id: 'dsh-native-collab-subagent', moduleName: '@dsh-native-collab/derived/subagent', previousModule: '@deepseek-ai/dsh-subagent', operation: 'replace' },
+          { scope: 'root', id: 'dsh-native-collab-subagent', moduleName: '@sieuno/dsh-native-collab/subagent', previousModule: '@deepseek-ai/dsh-subagent', operation: 'replace' },
         ],
       }
     },

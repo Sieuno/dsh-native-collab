@@ -20,9 +20,9 @@ async function harness(language, options={}) {
  let spec
  const source=await readFile(new URL('../dist/client.js',import.meta.url),'utf8')
  runInNewContext(source,{setTimeout,clearTimeout,document:{activeElement:null},window:{__ModuleLoader__:{load(value){spec=value}}}})
- const target={scope:'preset:preset-standard',id:'tool-subagent-fork',moduleName:'@dsh-native-collab/derived/tool-subagent/fork',previousModule:'@deepseek-ai/dsh-tool-subagent',operation:'replace'}
+ const target={scope:'preset:preset-standard',id:'tool-subagent-fork',moduleName:'@sieuno/dsh-native-collab/tool-subagent/fork',previousModule:'@deepseek-ai/dsh-tool-subagent',operation:'replace'}
  const remote={collabUi:{
-  async status(){return {rows:[{id:'dsh-native-collab-agent-team',moduleName:'@dsh-native-collab/derived/agent-team',current:'enabled',sourceLayer:'unknown',runtimePhase:'active'}]}},
+  async status(){return {rows:[{id:'dsh-native-collab-agent-team',moduleName:'@sieuno/dsh-native-collab/agent-team',current:'enabled',sourceLayer:'unknown',runtimePhase:'active'}]}},
   async preview(){calls.push('legacy-preview');throw Error('Obsolete preview must not be invoked from the page')},
   async bootStatus(){return {profileName:'test',configured:'disabled',writeSupport:'available',pendingRestart:'unknown',error:null}},
   async bootPlan(action){calls.push({plan:action});return {action,accepted:false,planId:TOKEN,targets:Array.from({length:40},(_,i)=>({...target,scope:target.scope+'-'+i})),pendingRestart:'required',error:null,warnings:['fixed-state-not-history-restore','native-features-will-be-enabled']}},

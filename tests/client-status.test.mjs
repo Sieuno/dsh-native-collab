@@ -32,11 +32,11 @@ test('browser entry mounts its namespace and locale before registering five supp
   let calls = 0
   const React = { Fragment: 'fragment', useState: initial => [initial, () => {}], createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) }
   const { spec, plugin, registrations, cleanup } = await load(React, { collabUi: { async status() { calls++; return { rows: [] } } } })
-  assert.equal(spec.id, '@dsh-native-collab/derived')
+  assert.equal(spec.id, '@sieuno/dsh-native-collab')
   assert.deepEqual([...plugin.inject], ['slots', 'remote', 'locale'])
   assert.equal(calls, 0)
   assert.deepEqual(registrations.map(row => row.contract.name), ['plugins.bundle.config', 'plugins.detail.badge', 'plugins.detail.section', 'plugins.row.config', 'plugins.bundle.activation'])
-  assert.equal(registrations[0].contract.key, '@dsh-native-collab/derived')
+  assert.equal(registrations[0].contract.key, '@sieuno/dsh-native-collab')
   const injected = registrations[0].contract.inject()
   assert.equal(typeof injected.readStatus, 'function')
   assert.deepEqual(await injected.readStatus(), { rows: [] })

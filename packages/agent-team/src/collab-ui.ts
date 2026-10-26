@@ -21,15 +21,15 @@ function invalidBootInput(method: 'bootPlan' | 'bootApply', field: string): neve
 }
 import type { BootSwitchManager, BootStatus, BootPlan, BootResult } from './boot-switch.ts'
 
-const PACKAGE = '@dsh-native-collab/derived'
+const PACKAGE = '@sieuno/dsh-native-collab'
 const ROWS = [
-  { id: 'dsh-native-collab-subagent', moduleName: '@dsh-native-collab/derived/subagent' },
-  { id: 'dsh-native-collab-tool-subagent-control', moduleName: '@dsh-native-collab/derived/tool-subagent-control' },
-  { id: 'dsh-native-collab-tool-subagent-list-agents', moduleName: '@dsh-native-collab/derived/tool-subagent-control/list-agents' },
-  { id: 'dsh-native-collab-agent-team', moduleName: '@dsh-native-collab/derived/agent-team' },
-  { id: 'dsh-native-collab-tool-agent-team', moduleName: '@dsh-native-collab/derived/tool-agent-team' },
-  { id: 'dsh-native-collab-tool-subagent', moduleName: '@dsh-native-collab/derived/tool-subagent' },
-  { id: 'dsh-native-collab-tool-subagent-fork', moduleName: '@dsh-native-collab/derived/tool-subagent/fork' },
+  { id: 'dsh-native-collab-subagent', moduleName: '@sieuno/dsh-native-collab/subagent' },
+  { id: 'dsh-native-collab-tool-subagent-control', moduleName: '@sieuno/dsh-native-collab/tool-subagent-control' },
+  { id: 'dsh-native-collab-tool-subagent-list-agents', moduleName: '@sieuno/dsh-native-collab/tool-subagent-control/list-agents' },
+  { id: 'dsh-native-collab-agent-team', moduleName: '@sieuno/dsh-native-collab/agent-team' },
+  { id: 'dsh-native-collab-tool-agent-team', moduleName: '@sieuno/dsh-native-collab/tool-agent-team' },
+  { id: 'dsh-native-collab-tool-subagent', moduleName: '@sieuno/dsh-native-collab/tool-subagent' },
+  { id: 'dsh-native-collab-tool-subagent-fork', moduleName: '@sieuno/dsh-native-collab/tool-subagent/fork' },
 ] as const
 const ENABLE_LINKED = new Set<string>([
   'dsh-native-collab-subagent',
@@ -52,7 +52,7 @@ export interface CollabUiStatus {
   assembly: AssemblySnapshot | null
 }
 
-const COLLAB_UI_BRAND = Symbol.for('@dsh-native-collab/derived.collabUi')
+const COLLAB_UI_BRAND = Symbol.for('@sieuno/dsh-native-collab.collabUi')
 
 interface AssemblySnapshot {
   readonly present: true

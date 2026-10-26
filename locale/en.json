@@ -50,7 +50,7 @@
     "lifecycleStep.backup": "Review the exact rows, modules and scopes. Native capabilities that were originally OFF will also be enabled.",
     "lifecycleStep.withdraw": "Check Profile, home and --patch overrides. Resolve reported conflicts before reviewing again; never clear the whole configuration blindly.",
     "lifecycleStep.verify": "Verify that next-start native services are enabled and derived references withdrawn; this is not current runtime status.",
-    "lifecycleStep.remove": "Stop this Profile’s Host and Agent, then run dsh plugin --profile <p> remove @dsh-native-collab/derived.",
+    "lifecycleStep.remove": "Stop this Profile’s Host and Agent, then run dsh plugin --profile <p> remove @sieuno/dsh-native-collab.",
     "lifecycleStep.restart": "Restart as the Host requires. Verify S0 pre-install sessions, S1 plugin-period sessions, and a new session.",
     "lifecycleSidecar": "The budget sidecar is kept by default. Reinstalling the same root reuses its used count. This page does not delete the sidecar, the pnpm store, operation logs, or sessions.",
     "lifecycleNotAuto": "Official Remove still does not close this switch. This component applies user-confirmed configuration changes only; dispose is not an uninstall hook.",

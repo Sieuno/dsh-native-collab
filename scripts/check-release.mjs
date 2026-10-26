@@ -15,7 +15,8 @@ const rows = [
   { id: 'dsh-native-collab-tool-subagent', module: 'tool-subagent', runtime: './dist/tool-subagent/index.js', icon: './icons/tool-subagent.svg' },
   { id: 'dsh-native-collab-tool-subagent-fork', module: 'tool-subagent/fork', runtime: './dist/tool-subagent/fork.js', icon: './icons/tool-subagent-fork.svg' },
 ]
-if (pkg.name !== '@dsh-native-collab/derived' || pkg.version !== '0.2.0' || pkg.private !== true) issues.push('package identity/private safety mismatch')
+if (pkg.name !== '@sieuno/dsh-native-collab' || pkg.version !== '0.2.1' || pkg.private === true) issues.push('package identity/publication configuration mismatch')
+if (pkg.publishConfig?.access !== 'public' || pkg.publishConfig?.registry !== 'https://registry.npmjs.org/') issues.push('npm publication target mismatch')
 if (pkg.engines?.dsh !== '>=0.2.1-rc.1 <0.2.2-0' || pkg.engines?.node !== '>=22.19.0') issues.push('engine compatibility range mismatch')
 if (pkg.dependencies?.zod !== '4.4.3' || pkg.dependencies?.['@deepseek-ai/schemastery'] !== undefined) issues.push('runtime dependency declaration mismatch')
 if (pkg.devDependencies?.typescript !== '5.9.3') issues.push('typescript source-build dependency missing')
@@ -72,10 +73,10 @@ if (!patch.includes('\n- insert:')) issues.push('default patch must declare inse
 const patchRows = [...patch.matchAll(/- id: "([^\"]+)"\s*\n\s+name: "([^\"]+)"\s*\n\s+disabled: (\w+)/g)]
 if (patchRows.length < 1) issues.push('default patch has no rows')
 const ui = patchRows.find(([, id]) => id === 'dsh-native-collab-ui')
-if (ui?.[2] !== '@dsh-native-collab/derived' || ui?.[3] !== 'false') issues.push('default UI anchor must be the active bare package row')
+if (ui?.[2] !== '@sieuno/dsh-native-collab' || ui?.[3] !== 'false') issues.push('default UI anchor must be the active bare package row')
 for (const match of patchRows) if (match[1] !== 'dsh-native-collab-ui' && match[3] !== 'true') issues.push(`${match[1]} must default disabled`)
 for (const row of rows) {
-  if (!patch.includes(`id: "${row.id}"`) || !patch.includes(`name: "@dsh-native-collab/derived/${row.module}"`)) issues.push(`default patch row missing or mismapped: ${row.id}`)
+  if (!patch.includes(`id: "${row.id}"`) || !patch.includes(`name: "@sieuno/dsh-native-collab/${row.module}"`)) issues.push(`default patch row missing or mismapped: ${row.id}`)
 }
 const js = (await walk(join(root, 'dist'))).filter(file => file.endsWith('.js'))
 const requiredJs = ['dist/client.js', 'dist/tool-subagent/delegation.js', 'dist/tool-subagent/fork.js', 'dist/agent-team/own-model.js']

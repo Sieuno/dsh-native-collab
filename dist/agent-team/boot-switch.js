@@ -5,7 +5,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { bundlePatchPaths, composeEntries, evaluatePluginCompatibility, loadOverlayPatches, readProfileManifest, readProfilePatches, readProfileVersionExemptions, resolveBundleDir, } from '@deepseek-ai/dsh-app-boot';
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write';
 import { isMap, isSeq, parseDocument, Scalar, visit } from 'yaml';
-const PACKAGE = '@dsh-native-collab/derived';
+const PACKAGE = '@sieuno/dsh-native-collab';
 const JS_TAG = 'tag:yaml.org,2002:js';
 const TTL_MS = 5 * 60_000;
 const MAX_PLANS = 16;

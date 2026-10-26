@@ -5,10 +5,12 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
-test('release metadata is pinned and guarded from npm publish', () => {
-  assert.equal(pkg.name, '@dsh-native-collab/derived')
-  assert.equal(pkg.version, '0.2.0')
-  assert.equal(pkg.private, true)
+test('release metadata is pinned for public npm publication', () => {
+  assert.equal(pkg.name, '@sieuno/dsh-native-collab')
+  assert.equal(pkg.version, '0.2.1')
+  assert.notEqual(pkg.private, true)
+  assert.equal(pkg.publishConfig.access, 'public')
+  assert.equal(pkg.publishConfig.registry, 'https://registry.npmjs.org/')
   assert.equal(pkg.engines.node, '>=22.19.0')
   assert.equal(pkg.engines.dsh, '>=0.2.1-rc.1 <0.2.2-0')
   assert.equal(pkg.dsh.bundle.patch, './cordis.patch.yml')
@@ -54,9 +56,9 @@ test('bundle patch activates the bare UI anchor and keeps feature IDs disabled',
   }
   const anchor = entries.find(entry => entry[1] === 'dsh-native-collab-ui')
   assert.ok(anchor)
-  assert.equal(anchor[2], '@dsh-native-collab/derived')
+  assert.equal(anchor[2], '@sieuno/dsh-native-collab')
   assert.equal(anchor[3], 'false')
   const features = entries.filter(entry => entry[1] !== 'dsh-native-collab-ui')
   assert.ok(features.every(entry => entry[3] === 'true'))
-  assert.ok(features.every(entry => entry[2].startsWith('@dsh-native-collab/derived/')))
+  assert.ok(features.every(entry => entry[2].startsWith('@sieuno/dsh-native-collab/')))
 })

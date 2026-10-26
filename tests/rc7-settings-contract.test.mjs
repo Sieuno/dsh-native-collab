@@ -58,7 +58,7 @@ function sourceLoader(overrides) {
 const pluginLoader = sourceLoader({})
 const { Config, default: CollabUiService } = pluginLoader(join(root, 'packages/agent-team/src/bootstrap.ts'))
 const NS = 'dsh-native-collab-ui'
-const MODULE = '@dsh-native-collab/derived'
+const MODULE = '@sieuno/dsh-native-collab'
 
 async function fixture(initial = {}, inherited = {}) {
   const directory = await mkdtemp(join(root, '../../reviews/rc7-fixes/lead/settings-'))

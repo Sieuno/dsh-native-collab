@@ -50,7 +50,7 @@
     "lifecycleStep.backup": "执行前查看具体行、模块和 scope；原先未开启的原生能力也会开启。",
     "lifecycleStep.withdraw": "核对 Profile、home 和 --patch 覆盖。若冲突被阻止，请先处理冲突再重新确认，不要盲清整个配置。",
     "lifecycleStep.verify": "确认下次启动的原生服务已启用、派生引用已撤销；这不是当前运行状态。",
-    "lifecycleStep.remove": "停止该 Profile 的 Host 和 Agent 后，再执行 dsh plugin --profile <p> remove @dsh-native-collab/derived。",
+    "lifecycleStep.remove": "停止该 Profile 的 Host 和 Agent 后，再执行 dsh plugin --profile <p> remove @sieuno/dsh-native-collab。",
     "lifecycleStep.restart": "按 Host 要求重启，并核验 S0 安装前会话、S1 插件期会话和新会话。",
     "lifecycleSidecar": "预算 sidecar 默认保留。同一 root 重装会沿用已记录的 used。此页不删除 sidecar、pnpm store、操作日志或会话。",
     "lifecycleNotAuto": "官方 Remove 仍不会自动关闭总开关。此组件仅提供用户确认后的配置切换；dispose 不是卸载钩子。",

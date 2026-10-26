@@ -19,7 +19,7 @@ const { SubagentRuntime, requireAssemblySnapshot } = await import(new URL('../di
 const PENDING = 0
 const ACTIVE = 2
 const FAILED = 3
-const OLD_KEY = Symbol.for('@dsh-native-collab/derived.assemblySnapshot')
+const OLD_KEY = Symbol.for('@sieuno/dsh-native-collab.assemblySnapshot')
 
 function tick() {
   return new Promise(resolve => setTimeout(resolve, 30))

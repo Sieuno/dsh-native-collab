@@ -15,7 +15,13 @@
 
 更新 `package.json`、锁文件和 `CHANGELOG.md` 后，推送同版本标签（如 `v0.2.1`）。GitHub Actions 会自动构建、生成 TGZ 并上传到对应预发布 Release，无需手动上传附件。源码下载由 GitHub 自动提供。
 
-npm 发布与 GitHub Release 分开管理；发布 npm 时使用 `npm publish --access public`，按 npm 提示完成账号验证。
+npm 必须在 GitHub Release 完成后发布，使用：
+
+```sh
+node scripts/publish-release.mjs v0.2.2
+```
+
+将版本换成待发布标签。此入口只下载该 Release 唯一的 TGZ，核对 GitHub 提供的文件哈希，然后将下载的同一文件发布到 npm。不会执行本地构建或 `npm pack`，也不会回退到本地源码目录。账号验证按 npm 提示完成；不要绕过此入口直接发布本地目录或本地打包文件。
 
 测试代码中的旧 RC 标识用于定位回归用例，不代表已经公开发布过这些版本。
 

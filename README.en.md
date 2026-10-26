@@ -21,6 +21,8 @@ This returns to a fixed native baseline, not the complete pre-install configurat
 - A review-and-confirm switch for selecting derived collaboration components at the next startup.
 - A persistent per-Team request limit as a supporting feature. The default is 32 requests; this is not a token or monetary budget.
 
+**No parallel toolset.** The plugin provides compatible replacements for the original collaboration tools, preserving their existing collaboration capabilities while adding enhancements. It also updates model-facing tool descriptions and usage instructions, aiming to minimize extra context overhead from duplicate tool definitions and instructions.
+
 ## Compatibility
 
 Expected compatibility: `>=0.2.1-rc.1 <0.2.2-0` (DSH 0.2.1 series, starting at rc.1). The tested environment is recorded separately; a Profile name is not a compatibility restriction.

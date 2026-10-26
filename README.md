@@ -47,8 +47,6 @@ dsh plugin --profile web add @sieuno/dsh-native-collab
 
 也可在 DSH 的“添加插件”页面输入 `@sieuno/dsh-native-collab`。GitHub Release 提供相同内容的 TGZ 安装包，Windows、macOS 和 Linux 均使用这一格式，不需要手工解压。Source code ZIP 不是安装包。
 
-**旧版 0.2.0 用户注意：**旧包名为 `@dsh-native-collab/derived`，与新包不是同一安装项。请先用旧插件自己的总开关切回原生、确认保存并停止相关 Host/Agent，再卸载旧包，然后安装新包。不要同时安装，完整步骤见[升级说明](docs/INSTALL.md#从旧版-020-升级)。以后新包的同名版本可以正常更新。
-
 然后按安装说明启动对应 Profile，在左侧“插件”里打开本插件，用**插件自己的总开关**查看变更并确认，再停止相关 Host/Agent、完整重启。
 
 **装上 ≠ 已切换；保存成功 ≠ 当前 Agent 已生效。**不要手工逐个打开那七个派生组件开关；两个普通工具占位行本来就应保持关闭。

@@ -37,8 +37,6 @@ Read the [installation guide (Chinese)](docs/INSTALL.md) first: back up your Pro
 dsh plugin --profile web add @sieuno/dsh-native-collab
 ```
 
-Upgrading from 0.2.0? The previous package was `@dsh-native-collab/derived`. Use its own master switch to return to native components, confirm, stop the Host/Agents, then remove the old package before installing the new one. Do not install both package identities together. Future versions under the new name can update normally.
-
 Replace `web` with your Profile name. Installation only registers the management entry. Review and confirm the plugin's own master switch, stop the relevant Host/Agents, and fully restart the same Profile. Refreshing a browser tab is not a Host restart. Two ordinary-tool placeholder rows intentionally stay disabled; those tools operate inside presets.
 
 ## Before switching off or uninstalling

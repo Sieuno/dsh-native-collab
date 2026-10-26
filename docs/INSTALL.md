@@ -45,7 +45,7 @@ dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile@0.
 dsh plugin --profile web add @sieuno/dsh-native-collab
 ```
 
-以上命令同样可用于 Windows PowerShell。已有旧版 0.2.0 安装时，请先按文末升级步骤移除旧包，不能直接叠装。
+以上命令同样可用于 Windows PowerShell。
 
 首次安装只登记这个组合包：管理入口默认开启，七个派生功能/占位行默认关闭，不会立刻替换原生组件。请通过 `dsh plugin` 或 DSH 的插件管理页安装，不要在任意目录执行 `npm install` 代替 Profile 安装。
 
@@ -106,15 +106,3 @@ dsh plugin --profile web remove @sieuno/dsh-native-collab
 关闭 HMR 的小文件只控制热重载，不引用本插件；卸载成功后，如果希望恢复原本的热重载方式，可以在下次启动时不再传这份文件。不要顺手删除其他启动参数或用户 patch。
 
 遇到阻断或误卸载，请看[常见问题](FAQ.md)。
-
-## 从旧版 0.2.0 升级
-
-旧版 GitHub TGZ 的内部包名是 `@dsh-native-collab/derived`；它此前没有在 npm 发布。本次 npm 首发使用 `@sieuno/dsh-native-collab`。包名不同，首次升级请依次操作：
-
-1. 在旧插件中关闭**插件自己的总开关**，确认保存成功。
-2. 停止相关 Host 与 Agent，备份当前 Profile 配置。
-3. 执行 `dsh plugin --profile web remove @dsh-native-collab/derived`。
-4. 执行 `dsh plugin --profile web add @sieuno/dsh-native-collab`。
-5. 按本文关闭 HMR 的方式启动，查看新插件总开关的变更并确认，再完整重启。
-
-`web` 换成你使用的 Profile。旧版关闭后保留的预设副本和已有 Team 用量不会因改包名而重置。如果关闭被阻止，先处理冲突，不要强行卸载。迁移一次后，后续同名版本可正常更新。

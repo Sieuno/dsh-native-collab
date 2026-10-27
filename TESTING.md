@@ -16,7 +16,7 @@ npm run check:load -- --sdk-map <已有SDK模块映射.json> --read-root <允许
 npm run validate:package
 ```
 
-构建只转译和检查 JS 语法，不做完整类型检查。额外的静态导入检查需要真实的 Cordis 4.0.5 与 schemastery 3.18.5 声明；仅执行 `npm ci --legacy-peer-deps` 不会安装这些可选 SDK peer。CI 显式准备这两个构建依赖，不将其打包或改写 lockfile。`--check` 使用同一构建流程只读比对所有产物，缺失、内容不同或无源码对应的多余 JS 均失败，不重写文件。
+构建只转译和检查 JS 语法，不做完整类型检查。额外的静态导入检查需要真实的 Cordis 4.0.5 与 schemastery 3.18.5 声明；仅执行 `npm ci --legacy-peer-deps` 不会安装这些可选 SDK peer，而可选 peer 的显式 `npm install --no-save` 也不会真正安装。因此 CI 用 `npm pack` 把这两个已发布包解包到 `node_modules`（不改写 lockfile、不把声明提交进仓库），再以 `DSH_HOST_CONTRACT=require` 运行静态契约检查，声明缺失即失败。本机没有声明时会打印跳过提示并继续；设置 `DSH_HOST_CONTRACT=require` 可要求必须检查。`--check` 使用同一构建流程只读比对所有产物，缺失、内容不同或无源码对应的多余 JS 均失败，不重写文件。
 
 这些命令不会安装 SDK。映射仅在标准解析找不到已有依赖时提供：类型映射是模块名到已有 `.d.ts` 文件路径的 JSON 对象；模块映射是模块名到已有实际 JS 入口路径的 JSON 对象，不能用空对象或伪造导出替代 SDK。类型检查对插件全部 TS 源码开启 `strict`、`noEmit`；`skipLibCheck` 只跳过依赖声明内部检查，不等于验证宿主全部源码。
 

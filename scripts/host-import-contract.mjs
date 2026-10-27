@@ -3,16 +3,43 @@ import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const ts = require('typescript')
 
-export function checkHostImportContract(files) {
-  const program = ts.createProgram(files, {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    allowImportingTsExtensions: true,
-    skipLibCheck: true,
-    noEmit: true,
-    types: [],
+const COMPILER_OPTIONS = {
+  target: ts.ScriptTarget.ES2022,
+  module: ts.ModuleKind.NodeNext,
+  moduleResolution: ts.ModuleResolutionKind.NodeNext,
+  allowImportingTsExtensions: true,
+  skipLibCheck: true,
+  noEmit: true,
+  types: [],
+}
+
+const REQUIRED_SDK = ['@deepseek-ai/schemastery', '@deepseek-ai/cordis']
+
+/**
+ * The host SDK packages are optional peers: a plain `npm ci` leaves them out, so
+ * their declarations are only present on a machine that installed the SDK next to
+ * this plugin. Without those declarations every `Schema.*` receiver degrades to
+ * `any` and the checks below cannot distinguish a wrong API from a missing one, so
+ * report the skip instead of turning the absence into a failed build.
+ */
+function missingSdkTypings(files) {
+  const probe = files.find(file => file.endsWith('.ts'))
+  if (!probe) return [...REQUIRED_SDK]
+  return REQUIRED_SDK.filter(specifier => {
+    const resolved = ts.resolveModuleName(specifier, probe, COMPILER_OPTIONS, ts.sys).resolvedModule
+    return !resolved || !resolved.resolvedFileName.endsWith('.d.ts')
   })
+}
+
+export function checkHostImportContract(files) {
+  const missing = missingSdkTypings(files)
+  if (missing.length) {
+    const notice = `host-import contract skipped: ${missing.join(', ')} declarations are not resolvable; install the host SDK to check them, or set DSH_HOST_CONTRACT=require to fail instead`
+    if (process.env.DSH_HOST_CONTRACT === 'require') return [notice]
+    console.warn(notice)
+    return []
+  }
+  const program = ts.createProgram(files, COMPILER_OPTIONS)
   const checker = program.getTypeChecker()
   const issues = []
   for (const file of files) {

@@ -16,8 +16,23 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts --legacy-peer-deps
-      # Declaration-only build checks need these optional SDK peers; do not vendor them or change the lockfile.
-      - run: npm install --no-save --package-lock=false --ignore-scripts --legacy-peer-deps @deepseek-ai/cordis@4.0.5 @deepseek-ai/schemastery@3.18.5
+      # Declaration-only build checks need these optional SDK peers. npm reports them
+      # as unmet optional peers, so an explicit install is a no-op; unpack the
+      # published tarballs instead. Do not vendor them into the repo, and do not
+      # change the lockfile.
+      - name: 准备宿主 SDK 声明
+        run: |
+          mkdir -p _sdk_typings
+          cd _sdk_typings
+          for target in cordis@4.0.5 schemastery@3.18.5; do
+            name="${target%@*}"
+            version="${target#*@}"
+            npm pack --silent "@deepseek-ai/${name}@${version}"
+            mkdir -p "../node_modules/@deepseek-ai/${name}"
+            tar -xzf "deepseek-ai-${name}-${version}.tgz" -C "../node_modules/@deepseek-ai/${name}" --strip-components=1
+          done
       - run: node scripts/emit-dist.mjs --check
+        env:
+          DSH_HOST_CONTRACT: require
       - run: node scripts/check-release.mjs
       - run: npm test

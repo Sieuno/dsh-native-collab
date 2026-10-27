@@ -1,12 +1,29 @@
 # DSH Native Collab
 
-**DeepSeek Harness agent collaboration enhancements (based on the original plugin)**: child Agent communication enhancements and Team model selection for DeepSeek Harness (DSH). An unofficial community plugin derived from DeepSeek Harness. [中文](README.md).
+**DeepSeek Harness agent collaboration enhancements (based on the original plugin)**: child Agent communication enhancements and Team model selection for DeepSeek Harness (DSH). An unofficial community plugin derived from DeepSeek Harness. [中文](https://github.com/Sieuno/dsh-native-collab/blob/main/README.md).
 
-**Status**: Trial build. Full tests, real-Profile, and real-LLM-task validation are not complete; the declared compatibility range does not imply verified support. Declared compatibility: DSH `>=0.2.1-rc.1 <0.2.2-0`, Node `>=22.19.0`.
+**Status**: Trial build. Full tests, real-Profile, and real-LLM-task validation are not complete. Supported DSH and Node ranges live in the [installation guide](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/INSTALL.en.md); a declared range does not imply verified support.
 
-[Installation Guide](docs/INSTALL.en.md) · [FAQ](docs/FAQ.en.md) · [Test Tiers](TESTING.md) · [Upstream](UPSTREAM.md)
+[Installation Guide](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/INSTALL.en.md) · [FAQ](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.en.md) · [Issues](https://github.com/Sieuno/dsh-native-collab/issues)
 
 ---
+
+## Installation & Setup
+
+Install into the Profile you actually use; there is no need to stop the running instance first (installation only writes dependencies into that Profile). Replace `<profile>` with your Profile name (the GUI default is usually `web`):
+
+```sh
+dsh plugin --profile <profile> add @sieuno/dsh-native-collab
+```
+
+To install from a local or offline package, replace the package name with the path to the TGZ file. After installing or upgrading, close and restart that Profile to load the new version (a browser refresh alone is not a restart); when upgrading over a currently running older version, close that instance first to avoid Windows file locks.
+
+After the restart, open the plugin management page:
+
+- **Automatic Saving**: All changes save automatically without manual save buttons; errors appear beside the affected item.
+- **Activation**: Model source changes apply immediately to subsequent queries and creation; feature toggles and wake-up limits take effect after restarting the Profile as prompted (refreshing the browser page does not count as a restart).
+- **Uninstallation**: Removing the plugin removes the patch and restores native services. If manual entries were previously pinned, see the recovery guide in the [FAQ](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.en.md).
+- **Startup Recovery**: If DSH fails to start after uninstalling or downgrading the plugin, check whether a `*.patch.json` external startup overlay under the Profile directory still references this plugin, then clean stale rows from the Profile patch; see the [FAQ](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.en.md).
 
 ## Main Features
 
@@ -26,26 +43,11 @@ View progress and results in the originating conversation's Team panel or task c
 ## Architecture & Integration
 
 The patch inserts only one management entry that manages three backend services. Native root services are mutually exclusive with the management entry: when enabled, managed services run; when disabled, native root services are restored upon restart.
+
 Four tools are adapted in memory for the four known AgentPreset IDs and module identities without pinning or rewriting preset files, and unknown custom providers remain untouched. Root tools from experimental packages remain disabled.
-
-## Installation & Setup
-
-Install into the Profile you actually use; there is no need to stop the running instance first (installation only writes dependencies into that Profile). Replace `<profile>` with your Profile name (the GUI default is usually `web`):
-
-```sh
-dsh plugin --profile <profile> add @sieuno/dsh-native-collab
-```
-
-To install from a local or offline package, replace the package name with the path to the TGZ file. After installing or upgrading, close and restart that Profile to load the new version (a browser refresh alone is not a restart); when upgrading over a currently running older version, close that instance first to avoid Windows file locks.
-
-After the restart, open the plugin management page:
-- **Automatic Saving**: All changes save automatically without manual save buttons; errors appear beside the affected item.
-- **Activation**: Model source changes apply immediately to subsequent queries and creation; feature toggles and wake-up limits take effect after restarting the Profile as prompted (refreshing browser page does not count as restart).
-- **Uninstallation**: Removing the plugin removes the patch and restores native services. If manual entries were previously pinned, see the recovery guide in the [FAQ](docs/FAQ.en.md).
-- **Startup Recovery**: If DSH fails to start after uninstalling or downgrading the plugin, check whether a `*.patch.json` external startup overlay under the Profile directory still references this plugin, then clean stale rows from the Profile patch; see the [FAQ](docs/FAQ.en.md).
 
 ## Development & License
 
-[Contributing](CONTRIBUTING.md) · [Testing](TESTING.md) · [Changelog](CHANGELOG.md).
+[Contributing](https://github.com/Sieuno/dsh-native-collab/blob/main/CONTRIBUTING.md) · [Testing](https://github.com/Sieuno/dsh-native-collab/blob/main/TESTING.md) · [Changelog](https://github.com/Sieuno/dsh-native-collab/blob/main/CHANGELOG.md).
 
-Derived from [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) `dsh-v0.2.1-rc.2`, licensed under [MIT](LICENSE). See [Upstream](UPSTREAM.md) and [Third-party notices](THIRD_PARTY_NOTICES.md).
+Derived from [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), licensed under [MIT](https://github.com/Sieuno/dsh-native-collab/blob/main/LICENSE). See [Upstream](https://github.com/Sieuno/dsh-native-collab/blob/main/UPSTREAM.md) and [Third-party notices](https://github.com/Sieuno/dsh-native-collab/blob/main/THIRD_PARTY_NOTICES.md).

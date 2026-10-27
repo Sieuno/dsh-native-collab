@@ -1,12 +1,29 @@
 # DSH Native Collab · 原生协作增强
 
-**Deepseek Harness Agent协作增强（基于原版插件）**：为 DeepSeek Harness (DSH) 提供子 Agent 沟通增强与 Team 模型选择支持，基于 DSH 派生的**非官方社区插件**（非官方发行版）。
+**Deepseek Harness Agent 协作增强（基于原版插件）**：为 DeepSeek Harness (DSH) 提供子 Agent 沟通增强与 Team 模型选择支持，是派生自 DSH 的**非官方社区插件**（非官方发行版）。
 
-**当前状态**：试用版本，尚未完成完整测试、真实 Profile 与真实 LLM 任务验证；声明的兼容范围不代表已验证。兼容 DSH `>=0.2.1-rc.1 <0.2.2-0` 与 Node `>=22.19.0`。
+**当前状态**：试用版本，尚未完成完整测试、真实 Profile 与真实 LLM 任务验证；支持范围与运行要求（Node、DSH 版本）以[安装指南](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/INSTALL.md)为准，声明的范围不代表已验证。
 
-[English](README.en.md) · [安装指南](docs/INSTALL.md) · [常见问题 (FAQ)](docs/FAQ.md)
+[English](https://github.com/Sieuno/dsh-native-collab/blob/main/README.en.md) · [安装指南](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/INSTALL.md) · [常见问题 (FAQ)](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.md) · [反馈](https://github.com/Sieuno/dsh-native-collab/issues)
 
 ---
+
+## 安装与快速上手
+
+在**你当前使用的 Profile** 下安装即可，无需先停止正在运行的实例（安装只向该 Profile 写入依赖）。把 `<profile>` 换成实际使用的 Profile 名（GUI 默认通常是 `web`）：
+
+```sh
+dsh plugin --profile <profile> add @sieuno/dsh-native-collab
+```
+
+使用本地或离线包时，把包名换成对应的 TGZ 包路径。安装或升级完成后，关闭并重新启动该 Profile 才会加载新版本（单纯刷新网页不算重启）；升级替换正在使用的旧版本时，建议先关闭该实例，避免 Windows 上的文件占用。
+
+重启后进入插件管理页面：
+
+- **修改自动保存**：页面中的各项设置修改后会自动保存，无需点击保存按钮；若保存未确认或失败，对应项旁将显示错误提示。
+- **生效方式**：模型来源立即生效于后续的模型查询与创建；增强开关及连续自动唤醒轮数上限等启动配置，在按提示正常关闭服务并重启同一 Profile 后应用（单纯刷新网页不算重启）。
+- **卸载与清理**：移除插件会自动移除 patch 并切回原生根服务。如曾手动修改并锁定过插件内部模块，请查阅[常见问题 (FAQ)](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.md) 的恢复指南。
+- **启动失败排查**：卸载或降级后若 DSH 无法启动，先检查 Profile 目录下的 `*.patch.json` 外部启动覆盖文件是否仍引用本插件，再清理 Profile patch 中的残留行；步骤见[常见问题 (FAQ)](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.md)。
 
 ## 主要功能
 
@@ -26,26 +43,11 @@
 ## 运行与适配机制
 
 插件 patch 只插入一个管理入口，由其统一管理三个后台服务。三个原生根服务与管理入口状态互斥：入口启用时运行增强托管服务；关闭入口后正常重启同一 Profile 即可恢复原生服务。
+
 四个协作工具针对四种已知 AgentPreset 在内存中按模块身份与 ID 动态适配，不修改或锁定用户原有预设文件，亦不影响未知自定义 provider。官方实验包的四个根层工具保持禁用。
-
-## 安装与快速上手
-
-在**你当前使用的 Profile** 下安装即可，无需先停止正在运行的实例（安装只向该 Profile 写入依赖）。把 `<profile>` 换成实际使用的 Profile 名（GUI 默认通常是 `web`）：
-
-```sh
-dsh plugin --profile <profile> add @sieuno/dsh-native-collab
-```
-
-使用本地或离线包时，把包名换成对应的 TGZ 包路径。安装或升级完成后，关闭并重新启动该 Profile 才会加载新版本（单纯刷新网页不算重启）；升级替换正在使用的旧版本时，建议先关闭该实例，避免 Windows 上的文件占用。
-
-重启后进入插件管理页面：
-- **修改自动保存**：页面中的各项设置修改后会自动保存，无需点击保存按钮；若保存未确认或失败，对应项旁将显示错误提示。
-- **生效方式**：模型来源立即生效于后续的模型查询与创建；增强开关及连续自动唤醒轮数上限等启动配置，在按提示正常关闭服务并重启同一 Profile 后应用（单纯刷新网页不算重启）。
-- **卸载与清理**：移除插件会自动移除 patch 并切回原生根服务。如曾手动修改并锁定过插件内部模块，请查阅 [常见问题 (FAQ)](docs/FAQ.md) 的恢复指南。
-- **启动失败排查**：卸载或降级后若 DSH 无法启动，先检查 Profile 目录下的 `*.patch.json` 外部启动覆盖文件是否仍引用本插件，再清理 Profile patch 中的残留行；步骤见 [常见问题 (FAQ)](docs/FAQ.md)。
 
 ## 开发与许可
 
-[开发说明](CONTRIBUTING.md) · [测试说明](TESTING.md) · [更新日志](CHANGELOG.md)。
+[开发说明](https://github.com/Sieuno/dsh-native-collab/blob/main/CONTRIBUTING.md) · [测试说明](https://github.com/Sieuno/dsh-native-collab/blob/main/TESTING.md) · [更新日志](https://github.com/Sieuno/dsh-native-collab/blob/main/CHANGELOG.md)。
 
-本项目源自 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) `dsh-v0.2.1-rc.2`，遵循 [MIT License](LICENSE)，保留版权与 NOTICE 说明。详见 [上游来源说明](UPSTREAM.md) 与 [第三方声明](THIRD_PARTY_NOTICES.md)。
+本项目派生自 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，遵循 [MIT License](https://github.com/Sieuno/dsh-native-collab/blob/main/LICENSE)，保留版权与 NOTICE 说明；上游来源与第三方声明见 [UPSTREAM.md](https://github.com/Sieuno/dsh-native-collab/blob/main/UPSTREAM.md) 与 [THIRD_PARTY_NOTICES.md](https://github.com/Sieuno/dsh-native-collab/blob/main/THIRD_PARTY_NOTICES.md)。

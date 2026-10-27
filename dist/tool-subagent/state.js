@@ -1,8 +1,3 @@
-/**
- * Host-only fold of the native subagent model-selection policy event.
- * Same key and stateVersion as the official unit so a shared registry keeps one apply.
- * This fold does not filter on the fork cut: the event is this Session's own record.
- */
 export const POLICY_KEY = 'subagentModelSelectionPolicy';
 export const POLICY_EVENT = 'subagent/model-selection-policy';
 export const POLICY_STATE_VERSION = 1;
@@ -13,7 +8,10 @@ export function initPolicy() {
 export function applyPolicy(policy, event) {
     if (policy !== null || event.type !== POLICY_EVENT)
         return policy;
-    const allowedModels = event.data?.allowedModels;
+    const data = event.data;
+    const allowedModels = data !== null && typeof data === 'object' && 'allowedModels' in data
+        ? data.allowedModels
+        : undefined;
     if (!Array.isArray(allowedModels) || allowedModels.length === 0) {
         throw new Error('subagent/model-selection-policy requires at least one route');
     }

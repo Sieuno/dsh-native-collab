@@ -14,7 +14,7 @@ import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-ll
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SubagentDelivery } from './control-types.ts'
 import { SubagentError } from './error.ts'
-import type { SubagentSendMessageOptions } from './types.ts'
+import type { ChildActivitySnapshot, SubagentSendMessageOptions } from './types.ts'
 
 /**
  * Process-stable brand for the derived host delivery entry.
@@ -33,6 +33,10 @@ export interface CollabHostDelivery {
    * Ordinary config for the current plugin instance, not a hot field.
    */
   readonly modelDeliverySelection: boolean
+  /** Authoritative live descendants, excluding the selected nodes and their entire branches. */
+  childActivity(parent: Agent, excludedIds: ReadonlySet<SessionId>): ChildActivitySnapshot
+  /** Register synchronously before reading a snapshot; no synthetic initial notification. */
+  observeChildActivity(parent: Agent, excludedIds: ReadonlySet<SessionId>, onChange: () => void): () => void
   sendMessage(
     sender: Agent,
     targetId: SessionId,

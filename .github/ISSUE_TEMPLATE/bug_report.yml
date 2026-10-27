@@ -10,7 +10,7 @@ body:
     attributes:
       label: 版本
       description: DSH、Node、插件版本，以及系统
-      placeholder: "DSH 0.2.1-rc.2 / Node 22.23.4 / 插件 0.2.0 / 系统"
+      placeholder: "DSH <版本> / Node <版本> / 插件 <版本>（见插件管理页）/ 系统"
     validations:
       required: true
   - type: input

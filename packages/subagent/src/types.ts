@@ -27,6 +27,14 @@ export function SubagentRunId(id: string): SubagentRunId {
   return id as SubagentRunId
 }
 
+/** Synchronous process-local descendant activity; never inferred from durable catalogs. */
+export interface ChildActivitySnapshot {
+  /** Resident executions with pending work, including external runs through teardown. */
+  readonly runningIds: readonly SessionId[]
+  /** An admitted descendant is still preparing, publishing, or rolling back. */
+  readonly preparing: boolean
+}
+
 /** One managed child execution and its result delivery policy. */
 export interface SubagentActivationSpec {
   /** Registered backend to use. */
@@ -69,6 +77,8 @@ export type SubagentInterruptAuthority =
 
 /** Options for one model-authored message between adjacent Agents. */
 export interface SubagentSendMessageOptions {
+  /** A completed task report to the exact direct parent; never a peer/child bypass. */
+  readonly result?: boolean
   /** Caller cancellation, owning the operation only until inbox acceptance. */
   readonly signal: AbortSignal
   /**

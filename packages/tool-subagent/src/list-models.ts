@@ -39,7 +39,7 @@ function modelLine(provider: string, model: { id: string; name: string; descript
 }
 
 /** Read the requested provider, advertised models, or exact-model efforts. */
-async function listSubagentModels(
+export async function listSubagentModels(
   ctx: Context,
   policy: ModelSelectionPolicy,
   request: ListSubagentModelsRequest,
@@ -95,9 +95,7 @@ export function registerListSubagentModels(ctx: Context, policy: ModelSelectionP
     description:
       'Discover LLM routes for subagents without changing the current Agent. Call with no arguments to list '
       + 'registered providers, with `provider` to list its advertised models, or with `provider` and `model` '
-      + 'to inspect that exact model and its reasoning efforts. Catalog membership is advisory: an adapter may '
-      + 'accept an unlisted model id. Use the returned ids with a delegation tool\'s `provider`, `model`, and '
-      + '`reasoning_effort` fields.',
+      + 'to inspect that model and its reasoning efforts. Use the returned ids in `provider`, `model`, and `reasoning_effort`.',
     parameters: {
       provider: {
         type: 'string',
@@ -105,7 +103,7 @@ export function registerListSubagentModels(ctx: Context, policy: ModelSelectionP
       },
       model: {
         type: 'string',
-        description: 'Exact model id to inspect. Requires provider; omit to list that provider\'s advertised models.',
+        description: 'Exact model id to inspect. Requires provider; omit to list models.',
       },
     },
     output: {

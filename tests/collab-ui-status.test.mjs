@@ -10,12 +10,27 @@ const require = createRequire(import.meta.url)
 const ts = require(process.env.DSH_TYPESCRIPT_ENTRY || 'typescript')
 const sourcePath = join(import.meta.dirname, '..', 'packages', 'agent-team', 'src', 'collab-ui.ts')
 const source = isolatedCollabService(await readFile(sourcePath, 'utf8'))
+  .replace(/import \{ RemoteError \} from [^\n]+\n/, "const { RemoteError } = require('@deepseek-ai/dsh-typert-protocol')\n")
   .replace("import { Context } from '@deepseek-ai/cordis'\n", '')
 const compiled = ts.transpileModule(source, {
   fileName: sourcePath,
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, experimentalDecorators: false },
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, experimentalDecorators: false },
 })
-const { CollabUiService } = await import(`data:text/javascript;base64,${Buffer.from(compiled.outputText).toString('base64')}`)
+const layoutPath = join(import.meta.dirname, '..', 'packages', 'agent-team', 'src', 'assembly-layout.ts')
+const layoutSource = await readFile(layoutPath, 'utf8')
+const layoutOutput = ts.transpileModule(layoutSource, { fileName: layoutPath, compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
+const layoutModule = { exports: {} }
+new Function('require', 'module', 'exports', layoutOutput)(require, layoutModule, layoutModule.exports)
+const protocol = require('@deepseek-ai/dsh-typert-protocol')
+const stubRuntime = { ManagedRuntime: class { constructor(_ctx, mode) { this.mode = mode } status() { return { mode: this.mode, phase: this.mode === 'managed' ? 'loading' : 'not-requested', services: [] } } dispose() {} } }
+const module = { exports: {} }
+new Function('require', 'module', 'exports', compiled.outputText)(name => {
+  if (name === '@deepseek-ai/dsh-typert-protocol') return { ...protocol, TypertRemoteService: class { constructor(ctx) { this.ctx = ctx } }, Remote: method => method }
+  if (name === './assembly-layout.ts') return layoutModule.exports
+  if (name === './managed-runtime.ts') return stubRuntime
+  return require(name)
+}, module, module.exports)
+const { CollabUiService } = module.exports
 
 const ids = [
   'dsh-native-collab-subagent',
@@ -35,19 +50,24 @@ const moduleNames = [
   '@sieuno/dsh-native-collab/tool-subagent',
   '@sieuno/dsh-native-collab/tool-subagent/fork',
 ]
-function service(ctx) { return Object.assign(Object.create(CollabUiService.prototype), { ctx }) }
-
-test('RC9 public RemoteError rejects invalid action and malformed tokens before profile access', async () => {
-  const instance=service({ get(){ throw Error('Invalid input must not touch the profile') } })
-  for(const value of ['invalid',null,{},42]) await assert.rejects(instance.bootPlan(value), error => error.isDSHRemoteError===true && error.code==='collab-ui/input-invalid' && error.details.endpoint==='collabUi/bootPlan' && error.details.field==='action')
-  for(const value of ['bad-token','------------------------------------','a'.repeat(36),null,{}]) await assert.rejects(instance.bootApply(value), error => error.isDSHRemoteError===true && error.code==='collab-ui/input-invalid' && error.details.endpoint==='collabUi/bootApply' && error.details.field==='planId')
-})
+function service(ctx, mode = 'native') {
+  return Object.assign(Object.create(CollabUiService.prototype), {
+    ctx,
+    assembly: undefined,
+    managedRuntime: new stubRuntime.ManagedRuntime(ctx, mode),
+  })
+}
 
 test('Host status reads synthetic current profile inventory and writes nothing', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-collab-status-'))
   try {
+    assert.doesNotMatch(source, /\b(?:unlink|rmSync|writeFile)\b/)
+    assert.match(source, /ctx\.effect\(\(\) => \(\) => this\.managedRuntime\.dispose\(\), 'collabUi\.managedRuntime\(\)'\)/)
     const patch = join(dir, 'cordis.patch.yml')
+    const sidecar = join(dir, 'native_collab_team_budget.json')
+    const sidecarBefore = '{"used":3}\n'
     await writeFile(patch, 'synthetic profile; config: { token: SNAPSHOT-SHOULD-NOT-LEAK }\n')
+    await writeFile(sidecar, sidecarBefore)
     const before = await readFile(patch)
     const beforeFiles = (await readdir(dir)).sort()
     const profileContext = { name: 'synthetic-profile', dir, patchPath: patch }
@@ -56,14 +76,27 @@ test('Host status reads synthetic current profile inventory and writes nothing',
       enabled: index % 2 === 0,
       fiberPhase: index === 0 ? 'active' : null,
     }))
+    const gets = [], calls = [], runtimeCalls = []
+    const manager = {
+      async listPlugins() { calls.push('listPlugins'); return inventory },
+      setPluginEnabled() { throw new Error('mutator must not be called') },
+      enable() { throw new Error('mutator must not be called') },
+      disable() { throw new Error('mutator must not be called') },
+      remove() { throw new Error('mutator must not be called') },
+      uninstall() { throw new Error('mutator must not be called') },
+      write() { throw new Error('mutator must not be called') },
+    }
     const ctx = { get(name) {
+      gets.push(name)
       if (name === 'profileContext') return profileContext
-      if (name === 'pluginManager') return { async listPlugins() { return inventory } }
+      if (name === 'pluginManager') return manager
       if (name === 'hmr') return undefined
+      if (name === 'fs') throw new Error('fs requested')
       return undefined
     } }
-
-    const result = await service(ctx).status()
+    const instance = service(ctx)
+    instance.managedRuntime.dispose = () => runtimeCalls.push('dispose')
+    const result = await instance.status()
     assert.equal(result.profileName, 'synthetic-profile')
     assert.equal(result.hmrEnabled, false)
     assert.equal(result.writeSupport, 'unsupported')
@@ -75,12 +108,12 @@ test('Host status reads synthetic current profile inventory and writes nothing',
     assert.deepEqual(result.rows.map(row => row.current), ['enabled', 'disabled', 'enabled', 'disabled', 'enabled', 'disabled', 'enabled'])
     assert.ok(result.rows.every(row => row.sourceLayer === 'unknown'))
     assert.equal(result.rows[0].runtimePhase, 'active')
-    const enablePreview = await service(ctx).preview('enable')
-    const restorePreview = await service(ctx).preview('restore')
+    const enablePreview = await instance.preview('enable')
+    const restorePreview = await instance.preview('restore')
     assert.equal(enablePreview.accepted, false)
     assert.equal(restorePreview.accepted, false)
-    assert.deepEqual(enablePreview.desired.map(row => row.state), ['enabled', 'enabled', 'enabled', 'enabled', 'enabled', 'unknown', 'unknown'])
-    const bogus = await service(ctx).preview('bogus')
+    assert.deepEqual(enablePreview.desired.map(row => row.state), ['enabled', 'unknown', 'unknown', 'enabled', 'enabled', 'unknown', 'unknown'])
+    const bogus = await instance.preview('bogus')
     assert.equal(bogus.action, 'bogus')
     assert.equal(bogus.accepted, false)
     assert.ok(bogus.reasons.includes('invalid-action'))
@@ -93,7 +126,12 @@ test('Host status reads synthetic current profile inventory and writes nothing',
     assert.equal(payload.includes(patch), false)
     assert.equal(payload.includes(dir), false)
     assert.equal(await readFile(patch, 'utf8'), before.toString('utf8'))
+    assert.equal(await readFile(sidecar, 'utf8'), sidecarBefore)
     assert.deepEqual((await readdir(dir)).sort(), beforeFiles)
+    assert.deepEqual(calls, ['listPlugins', 'listPlugins', 'listPlugins', 'listPlugins'])
+    assert.deepEqual(runtimeCalls, [], 'read-only inspection must not dispose the managed runtime')
+    assert.deepEqual([...new Set(gets)].sort(), ['hmr', 'pluginManager', 'profileContext'])
+    for (const method of ['enable', 'restore', 'dispose']) assert.equal(typeof CollabUiService.prototype[method], 'undefined')
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -129,7 +167,7 @@ test('HMR and high-layer configuration remain write-free preview refusals', asyn
       async setPluginEnabled() { throw new Error('mutator must not be called') },
     }
     const ctx = { get(name) {
-      if (name === 'profileContext') return { name: 'synthetic-profile', dir, patchPath: patch, home, overlays: [{ id: 'dsh-native-collab-agent-team', disabled: false }] }
+      if (name === 'profileContext') return { name: 'synthetic-profile', dir, patchPath: patch, home: dir, overlays: [{ id: 'dsh-native-collab-agent-team', disabled: false }] }
       if (name === 'pluginManager') return manager
       if (name === 'hmr') return {}
       return undefined

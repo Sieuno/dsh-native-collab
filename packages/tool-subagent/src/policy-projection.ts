@@ -4,11 +4,11 @@
  */
 import { z } from 'zod'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import { applyPolicy, initPolicy, POLICY_KEY, POLICY_STATE_VERSION } from './state.ts'
+import { applyPolicy, initPolicy, POLICY_KEY, POLICY_STATE_VERSION, type PolicyState } from './state.ts'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
-    subagentModelSelectionPolicy: Array<{ provider: string, model: string }> | null
+    subagentModelSelectionPolicy: PolicyState
   }
 }
 

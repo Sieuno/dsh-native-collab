@@ -5,6 +5,9 @@ const protocol=pathToFileURL(require.resolve('@deepseek-ai/dsh-typert-protocol')
 // Legacy status unit tests isolate the Service and decorator only. Preserve the
 // real public RemoteError class so input failures test its cross-realm contract.
 export function isolatedCollabService(source) {
- return source.replace("import { Context } from '@deepseek-ai/cordis'\n",'')
+ return source.replace(/\r\n/g, '\n').replace("import { Context } from '@deepseek-ai/cordis'\n",'')
   .replace("import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'\n",`import { RemoteError } from ${JSON.stringify(protocol)}\nconst Remote=method=>method\nclass TypertRemoteService { constructor(ctx) { this.ctx=ctx } }\n`)
+  // Status/lifecycle tests do not exercise preset hooks. Keep the call site, but
+  // do not load or run the real adapter.
+  .replace("import { installPresetAdapter } from './preset-adapter.ts'\n",'const installPresetAdapter=()=>{}\n')
 }

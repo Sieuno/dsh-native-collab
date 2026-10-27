@@ -4,13 +4,13 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-session-persistence'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { MessageId } from '@deepseek-ai/dsh-llm'
 import { TeamActivity } from './activity.ts'
-import { TeamBudget } from './budget.ts'
 import { errorMessage, TeamError } from './error.ts'
-import { requireAssemblySnapshot, resolveTeamFlags } from '@dsh-native-collab/subagent'
+import { assertModelRouteAllowed, readCurrentModelSource, requireAssemblySnapshot, resolveTeamFlags } from '@dsh-native-collab/subagent'
 import { hostDeliverPrompt, modelDeliverySelectionEnabled } from './host-delivery.ts'
 import { decideDelivery } from './selection.ts'
 import { TeamJournal } from './journal.ts'
@@ -29,8 +29,6 @@ import type {
   SendTeamMessageResult,
   SpawnTeammateRequest,
   SpawnTeammateResult,
-  TeamBudgetReservation,
-  TeamBudgetView,
   TeamMemberView,
   TeamTaskView,
   TeamWaitResult,
@@ -52,8 +50,6 @@ const DEFAULT_MAX_MEMBERS = 16
 const DEFAULT_MAX_TASKS = 256
 const DEFAULT_MAX_MESSAGE_BYTES = 65_536
 const DEFAULT_DISPOSAL_TIMEOUT_MS = 5_000
-const DEFAULT_MAX_LOGICAL_REQUESTS = 32
-
 /** Validate one positive safe-integer deployment limit. */
 function positiveLimit(name: string, value: number): number {
   if (!Number.isSafeInteger(value) || value < 1) {
@@ -62,17 +58,32 @@ function positiveLimit(name: string, value: number): number {
   return value
 }
 
-/** Preserve the actual budget/storage failure code in Agent cancellation diagnostics. */
-function budgetCancellationReason(error: unknown): string {
-  const code = error instanceof TeamError ? error.code : 'TEAM_BUDGET_STORAGE_UNAVAILABLE'
-  return `Agent Team request budget admission blocked (${code})`
-}
-
 /** Call the public llm service only after a structural capability check. */
 function selectionPort(ctx: Context, enhanced: boolean): TeamSelectionPort {
   return {
     enhanced,
-    resolveCallConfig(config, signal) {
+    resolveCallConfig(config, signal, caller) {
+      const source = readCurrentModelSource(ctx)
+      if (source === undefined) throw new TeamError('collabUi model-source service is unavailable', 'TEAM_LLM_UNAVAILABLE')
+      const settingsService = source === 'settings' ? ctx.get('subagentModelSelection') : undefined
+      if (source === 'settings' && settingsService === undefined) throw new TeamError('subagentModelSelection service is unavailable', 'TEAM_LLM_UNAVAILABLE')
+      const current = settingsService?.current()
+      const projections = source === 'conversation'
+        ? ctx.get('sessionProjections') as { stateOf?: (session: object, key: string) => unknown } | undefined
+        : undefined
+      const policy = projections?.stateOf?.(caller.session, 'subagentModelSelectionPolicy')
+      const runtimeForPolicy = ctx.get('llm')
+      try {
+        assertModelRouteAllowed(
+          source,
+          { provider: config.provider, model: config.model },
+          Array.isArray(policy) ? policy as { provider: string; model: string }[] : undefined,
+          current,
+          source === 'all' && runtimeForPolicy !== undefined ? runtimeForPolicy.listProviders().map(provider => provider.id) : undefined,
+        )
+      } catch (error) {
+        throw new TeamError(error instanceof Error ? error.message : 'child route is not authorized', 'TEAM_AGENT_OPTIONS_INCOMPLETE', { cause: error })
+      }
       const runtime: unknown = ctx.get('llm')
       if (runtime === null || typeof runtime !== 'object' || !('resolveCallConfig' in runtime)) {
         throw new TeamError('llm.resolveCallConfig is unavailable', 'TEAM_LLM_UNAVAILABLE')
@@ -99,12 +110,12 @@ export class TeamService extends Service {
     maxTasks: z.number().step(1).min(1).default(DEFAULT_MAX_TASKS),
     maxMessageBytes: z.number().step(1).min(1).default(DEFAULT_MAX_MESSAGE_BYTES),
     disposalTimeoutMs: z.number().step(1).min(1).default(DEFAULT_DISPOSAL_TIMEOUT_MS),
-    maxLogicalRequests: z.number().step(1).min(1).default(DEFAULT_MAX_LOGICAL_REQUESTS),
+    maxLogicalRequests: z.number().step(1).min(1).description('Deprecated compatibility option; no request counting or cancellation is performed.'),
     enhancedSelection: z.boolean().default(true),
   })
 
   /** Validated deployment limits used by every Team operation. */
-  private readonly config: Required<Config>
+  private readonly config: Required<Omit<Config, 'maxLogicalRequests'>>
 
   /** Whether Team spawn enhancement parameters are accepted. */
   readonly selectionEnhanced: boolean
@@ -115,7 +126,6 @@ export class TeamService extends Service {
   private readonly activity: TeamActivity
   private readonly lifecycle: TeamRuntimeLifecycle
   private readonly journal: TeamJournal
-  private readonly budget: TeamBudget
   private readonly roster: TeamRoster
   private readonly tasks: TeamTaskBoard
 
@@ -130,10 +140,6 @@ export class TeamService extends Service {
         'disposalTimeoutMs',
         config.disposalTimeoutMs ?? DEFAULT_DISPOSAL_TIMEOUT_MS,
       ),
-      maxLogicalRequests: positiveLimit(
-        'maxLogicalRequests',
-        snapshot.teamRequestLimit ?? config.maxLogicalRequests ?? DEFAULT_MAX_LOGICAL_REQUESTS,
-      ),
       enhancedSelection: config.enhancedSelection ?? true,
     }
     const flags = resolveTeamFlags(this.config.enhancedSelection, snapshot)
@@ -143,19 +149,16 @@ export class TeamService extends Service {
     this.activity = new TeamActivity()
     this.lifecycle = new TeamRuntimeLifecycle(this.config.disposalTimeoutMs)
     this.journal = new TeamJournal(ctx, (root) => { this.activity.notify(TeamId(root.id)) })
-    this.budget = new TeamBudget(ctx, this.journal, this.config.maxLogicalRequests)
     this.roster = new TeamRoster(
       ctx,
       this.journal,
       this.lifecycle,
       this.config.maxMembers,
       selectionPort(ctx, this.selectionEnhanced),
-      this.budget,
     )
-    this.tasks = new TeamTaskBoard(this.journal, this.config.maxTasks, this.budget)
+    this.tasks = new TeamTaskBoard(this.journal, this.config.maxTasks)
 
-    ctx.on('agent/request', async ({ agent, turn, step }, next) => await this.admitRequest(agent, turn, step, next))
-    ctx.on('agent/created', ({ agent }) => { this.scheduleRecovery(agent) })
+    ctx.on('agent/created', ({ agent }) => { this.scheduleRecovery(agent); return undefined })
     ctx.on('agent/status', ({ agent }) => {
       const membership = this.roster.tryMembership(agent)
       if (membership !== undefined) this.activity.notify(membership.id)
@@ -167,27 +170,15 @@ export class TeamService extends Service {
         try {
           await this.disposeRuntime()
         } finally {
-          try {
-            await this.budget.close()
-          } finally {
-            disposeProjection()
-            disposeOwnModel()
-          }
+          disposeProjection()
+          disposeOwnModel()
         }
       }
     }, 'agentTeams.runtimeLifecycle()')
   }
 
-  /** Open the mandatory Host storage domain before recovery or request admission. */
+  /** Reconcile any Team continuations already live when the service is installed. */
   protected async [Service.init](): Promise<void> {
-    try {
-      await this.budget.open()
-    } catch (error: unknown) {
-      // Keep the request guard mounted. Existing Team Agents will fail closed
-      // through admitRequest; service-init rejection would unregister the guard.
-      this.ctx.logger.warn(`Agent Teams budget storage unavailable; Team requests will be denied: ${errorMessage(error)}`)
-      return
-    }
     for (const agent of this.ctx.agents.list()) this.scheduleRecovery(agent)
   }
 
@@ -198,47 +189,6 @@ export class TeamService extends Service {
    */
   membership(agent: Agent): TeamMembership {
     return this.roster.membership(agent)
-  }
-
-  /** Atomically reserve one logical request admission for a live Team Agent. */
-  async reserve(caller: Agent): Promise<TeamBudgetReservation | undefined> {
-    const membership = this.roster.requestMembership(caller)
-    if (membership === undefined) return undefined
-    return await this.budget.reserve(membership.root)
-  }
-
-  /** Read the persisted quota for one exact live Team Agent. */
-  getBudget(caller: Agent): TeamBudgetView {
-    return this.budget.get(this.roster.membership(caller).root)
-  }
-
-  private async admitRequest<T>(agent: Agent, turn: number, step: number, next: () => Promise<T>): Promise<T> {
-    let reservation: TeamBudgetReservation | undefined
-    let root: Agent | undefined
-    try {
-      root = this.roster.resolveBudgetRoot(agent)
-      if (root === undefined) return await next()
-      reservation = await this.budget.reserve(root)
-    } catch (error: unknown) {
-      if (root !== undefined) {
-        this.roster.stopForBudget(root, budgetCancellationReason(error))
-      } else if (this.ctx.agents.get(agent.id) === agent) {
-        agent.cancel({ kind: 'hook', reason: budgetCancellationReason(error) }, { keepInbox: true })
-      }
-      throw error
-    }
-    if (reservation.admitted) return await next()
-    try {
-      await this.budget.recordFirstDenial(root, agent.id, turn, step)
-    } catch (error: unknown) {
-      this.roster.stopForBudget(root, budgetCancellationReason(error))
-      throw error
-    }
-    this.roster.stopForBudget(root)
-    throw new TeamError(
-      `Team logical request budget exhausted (${reservation.budget.used}/${reservation.budget.limit}); inbox items already claimed by this turn may not be replayed`,
-      'TEAM_BUDGET_EXHAUSTED',
-    )
   }
 
   /**
@@ -360,6 +310,10 @@ export class TeamService extends Service {
     const { root } = membership
     const target = resolveActiveMember(root, this.journal.state(root), request.target)
     if (target.id === caller.id) throw new TeamError('a Team member cannot message itself', 'TEAM_SELF_MESSAGE')
+    const taskResult = request.taskResult === true
+    if (taskResult && (membership.role === 'lead' || target.id !== root.id)) {
+      throw new TeamError('taskResult is reserved for teammate completion reports to the Team Lead', 'TEAM_TASK_RESULT_UNAUTHORIZED')
+    }
     const content = [
       { type: 'text' as const, text: `Team message from ${membership.name}:` },
       ...structuredClone(request.content),
@@ -369,33 +323,48 @@ export class TeamService extends Service {
     }
     const source = { kind: 'agent-message' as const, form: 'relay' as const, senderSessionId: caller.id }
     const delivery = request.delivery ?? 'steer'
+    type AutomaticReservation = { commit(): void; refund(): void }
+    type AutomaticReservationApi = {
+      reserveAutomaticInteraction(sender: Agent, targetId: SessionId): AutomaticReservation
+    }
+    const automaticApi = this.ctx.subagents as unknown as Partial<AutomaticReservationApi>
+    const reservation = taskResult ? undefined : automaticApi.reserveAutomaticInteraction?.call(this.ctx.subagents, caller, target.id)
+    if (!taskResult && reservation === undefined) {
+      throw new TeamError('automatic interaction reservation is unavailable', 'TEAM_AUTOMATIC_INTERACTION_UNAVAILABLE')
+    }
     let messageId: MessageId
-    if (target.id === root.id) {
-      const input = createUserMessage({ content, source })
-      if (delivery === 'queue') root.followup(input)
-      else root.steer(input)
-      messageId = input.id
-    } else {
-      const deliver = hostDeliverPrompt(this.ctx.subagents)
-      if (deliver === undefined) {
-        throw new TeamError(
-          'replacement subagent runtime has no host delivery adapter',
-          'TEAM_HOST_DELIVERY_UNAVAILABLE',
+    try {
+      if (target.id === root.id) {
+        const input = createUserMessage({ content, source })
+        if (delivery === 'queue') root.followup(input)
+        else root.steer(input)
+        messageId = input.id
+      } else {
+        const deliver = hostDeliverPrompt(this.ctx.subagents)
+        if (deliver === undefined) {
+          throw new TeamError(
+            'replacement subagent runtime has no host delivery adapter',
+            'TEAM_HOST_DELIVERY_UNAVAILABLE',
+          )
+        }
+        const delivered: unknown = await deliver.call(
+          this.ctx.subagents,
+          root,
+          target.id,
+          content,
+          source,
+          request.signal,
+          delivery,
         )
+        if (typeof delivered !== 'string') {
+          throw new TeamError('host delivery did not return a message id', 'TEAM_HOST_DELIVERY_UNAVAILABLE')
+        }
+        messageId = brandString<MessageId>(delivered)
       }
-      const delivered: unknown = await deliver.call(
-        this.ctx.subagents,
-        root,
-        target.id,
-        content,
-        source,
-        request.signal,
-        delivery,
-      )
-      if (typeof delivered !== 'string') {
-        throw new TeamError('host delivery did not return a message id', 'TEAM_HOST_DELIVERY_UNAVAILABLE')
-      }
-      messageId = brandString<MessageId>(delivered)
+      reservation?.commit()
+    } catch (error: unknown) {
+      reservation?.refund()
+      throw error
     }
     this.activity.notify(membership.id)
     return { messageId }

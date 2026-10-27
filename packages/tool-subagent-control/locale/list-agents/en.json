@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "List Agents",
-    "description": "Inspect the current Lead and durable Agent Team members. Enabling this derived row replaces native tool-subagent-list-agents; both are not loaded."
+    "title": "Child Agent listing",
+    "description": "Lists child Agents started in this session with their status."
   }
 }

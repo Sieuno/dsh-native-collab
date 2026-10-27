@@ -2,6 +2,7 @@
  * Host-only display of one Session's own recorded model.
  * The inherited cut is an argument, never inferred from firstLiveSeq.
  */
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 
 export const OWN_MODEL_KEY = 'teamMemberOwnModel'
 
@@ -14,27 +15,13 @@ export interface OwnModelState {
 
 export type ModelSource = 'own-request' | 'creation-default'
 
-export interface HeaderEvent {
-  readonly type?: string
-  readonly seq?: number
-  readonly data?: {
-    readonly header?: {
-      readonly config?: {
-        readonly provider?: unknown
-        readonly model?: unknown
-        readonly reasoningEffort?: unknown
-      }
-    }
-  }
-}
-
 /** Empty own-model state. The header is accepted and ignored so the cut cannot be inferred from it. */
 export function initOwnModel(_header: unknown, inheritedEventCount: number): OwnModelState {
   return { inheritedEventCount }
 }
 
-/** Fold one committed event. Ancestor events below the inherited cut are ignored. */
-export function applyOwnModel(state: OwnModelState, event: HeaderEvent): OwnModelState {
+/** Fold one committed Session event. Ancestor events below the inherited cut are ignored. */
+export function applyOwnModel(state: OwnModelState, event: SessionEvent): OwnModelState {
   if (event.type !== 'request/header') return state
   if (typeof event.seq === 'number' && event.seq < state.inheritedEventCount) return state
   const config = event.data?.header?.config

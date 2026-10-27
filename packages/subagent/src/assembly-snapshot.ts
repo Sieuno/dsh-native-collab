@@ -1,7 +1,9 @@
 /**
  * Context-owned startup snapshot for the collaboration control service.
  * Consumers freeze the value at their own construction or apply.
- * A later profile edit is the next assembly preference, not a hot update.
+ * Most overlay values are next-assembly preferences; the two parent-message
+ * sub-options stay live because the loader commits volatile-only changes into
+ * the running references.
  * There is no process-global copy. A missing control service is not an unset overlay.
  */
 
@@ -13,6 +15,7 @@ export interface AssemblySnapshot {
   readonly modelEnhancement: boolean | undefined
   readonly communicationEnhancement: boolean | undefined
   readonly nativeModelSelectionCompatibility: boolean | undefined
+  readonly modelSource?: 'conversation' | 'settings' | 'all'
   readonly runningChildGuidance?: boolean
   readonly completedChildContinuation?: boolean
   readonly teamRequestLimit?: number
@@ -30,16 +33,48 @@ export function isAssemblySnapshot(value: unknown): value is AssemblySnapshot {
   return flag(row.modelEnhancement) === row.modelEnhancement
     && flag(row.communicationEnhancement) === row.communicationEnhancement
     && flag(row.nativeModelSelectionCompatibility) === row.nativeModelSelectionCompatibility
+    && (row.modelSource === undefined || row.modelSource === 'conversation' || row.modelSource === 'settings' || row.modelSource === 'all')
     && flag(row.runningChildGuidance) === row.runningChildGuidance
     && flag(row.completedChildContinuation) === row.completedChildContinuation
     && (row.teamRequestLimit === undefined || (Number.isSafeInteger(row.teamRequestLimit) && row.teamRequestLimit > 0))
 }
 
-function brandedService(ctx: { get?: (name: string) => unknown } | undefined): { assemblySnapshot?: () => unknown } | undefined {
+/** Live parent-message sub-options owned by the volatile control settings. */
+export interface ChildMessageFlags {
+  readonly runningChildGuidance?: boolean
+  readonly completedChildContinuation?: boolean
+}
+
+function brandedService(ctx: { get?: (name: string) => unknown } | undefined): {
+  assemblySnapshot?: () => unknown
+  currentModelSource?: () => unknown
+  childMessageFlags?: () => unknown
+} | undefined {
   const service = ctx && typeof ctx.get === 'function' ? ctx.get('collabUi') : undefined
   if (!service || typeof service !== 'object') return undefined
   if (Reflect.get(service, COLLAB_UI_BRAND) !== true) return undefined
-  return service as { assemblySnapshot?: () => unknown }
+  return service as {
+    assemblySnapshot?: () => unknown
+    currentModelSource?: () => unknown
+    childMessageFlags?: () => unknown
+  }
+}
+
+/**
+ * Read the live parent-message sub-options from this Context's branded service.
+ * `undefined` means the service is absent, illegal, or exposes no live reader.
+ */
+export function readChildMessageFlags(ctx: { get?: (name: string) => unknown } | undefined): ChildMessageFlags | undefined {
+  const service = brandedService(ctx)
+  if (!service || typeof service.childMessageFlags !== 'function') return undefined
+  const value = service.childMessageFlags.call(service)
+  if (typeof value !== 'object' || value === null) return undefined
+  const row = value as Record<string, unknown>
+  const running = flag(row.runningChildGuidance)
+  const continuation = flag(row.completedChildContinuation)
+  if (row.runningChildGuidance !== undefined && running === undefined) return undefined
+  if (row.completedChildContinuation !== undefined && continuation === undefined) return undefined
+  return { runningChildGuidance: running, completedChildContinuation: continuation }
 }
 
 /**
@@ -54,6 +89,13 @@ export function readAssemblySnapshot(ctx: { get?: (name: string) => unknown } | 
 }
 
 /** Fail before `super()` when this Context has no legal captured snapshot. */
+export function readCurrentModelSource(ctx: { get?: (name: string) => unknown } | undefined): 'conversation' | 'settings' | 'all' | undefined {
+  const service = brandedService(ctx)
+  if (!service || typeof service.currentModelSource !== 'function') return undefined
+  const value = service.currentModelSource.call(service)
+  return value === 'conversation' || value === 'settings' || value === 'all' ? value : undefined
+}
+
 export function requireAssemblySnapshot(ctx: { get?: (name: string) => unknown } | undefined): AssemblySnapshot {
   const snapshot = readAssemblySnapshot(ctx)
   if (!snapshot) throw new Error(MISSING)

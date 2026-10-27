@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "派生 Subagent Fork 工具",
-    "description": "Fork 委托。不拥有模型发现。省略时继承父路由。"
+    "title": "继承会话启动子 Agent",
+    "description": "启动继承当前会话上下文的子 Agent，适用于后续分析或任务延续。"
   }
 }

@@ -61,8 +61,10 @@ var __esDecorate = (this && this.__esDecorate) || function (ctor, descriptorIn, 
  *
  * @module @deepseek-ai/dsh-subagent
  */
-import { requireAssemblySnapshot, resolveCommunicationAdmission } from "./assembly-snapshot.js";
+import { readChildMessageFlags, requireAssemblySnapshot, resolveCommunicationAdmission } from "./assembly-snapshot.js";
 import { resolveChildMessagePolicy } from "./child-message-policy.js";
+import { AutoWakeGuard } from "./auto-wake-guard.js";
+import { foldSubagentDescriptor } from "./descriptor.js";
 import z from '@deepseek-ai/schemastery';
 import { scopeTarget } from '@deepseek-ai/dsh-scope';
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools';
@@ -88,7 +90,8 @@ export { SubagentError } from "./error.js";
 export { assertSubagentMaxDepth, delegationDepthOf } from "./depth.js";
 export { appendDelegatedPolicyOverrides, applyChildComposition, captureDelegatedPolicyOverrides, childSessionMeta, parentAgentOptionsForDelegation, resolveChildAgentOptions, resolveChildDepth, SubagentDepthError, } from "./child-agent.js";
 export { assertModelDeliveryEnabled, collabHostDelivery, isCollabHostDelivery, requireCollabSubagents, resolveModelDelivery, } from "./delivery.js";
-export { COLLAB_UI_BRAND, isAssemblySnapshot, readAssemblySnapshot, requireAssemblySnapshot, resolveCommunicationAdmission, resolveOrdinarySelectionKind, resolveTeamFlags, } from "./assembly-snapshot.js";
+export { COLLAB_UI_BRAND, isAssemblySnapshot, readAssemblySnapshot, readChildMessageFlags, readCurrentModelSource, requireAssemblySnapshot, resolveCommunicationAdmission, resolveOrdinarySelectionKind, resolveTeamFlags, } from "./assembly-snapshot.js";
+export { resolveModelSource, assertModelRouteAllowed } from "./model-source.js";
 /** Named provider registry with managed activations, durable discovery, and local child messaging. */
 let SubagentRuntime = (() => {
     let _classSuper = TypertRemoteService;
@@ -113,6 +116,8 @@ let SubagentRuntime = (() => {
         static inject = ['workingDirectory', 'collabUi'];
         providers = new Map();
         manager;
+        automaticWakeGuard = new AutoWakeGuard();
+        automaticWakeLimit;
         /**
          * The contained lifecycle-edge publisher. Built here because scoped dispatch
          * keys its carrier by this exact service instance, whose own context filter
@@ -128,7 +133,18 @@ let SubagentRuntime = (() => {
             const snapshot = requireAssemblySnapshot(ctx);
             super(ctx, 'subagents');
             this.config = config;
+            this.automaticWakeLimit = snapshot.teamRequestLimit ?? 32;
             this.assemblyCommunication = resolveCommunicationAdmission(config.deliverySelection, snapshot);
+            // Parent-message sub-options are volatile settings: re-resolve them whenever a
+            // message is admitted so a saved change applies without restarting the Host.
+            const resolveChildMessages = () => {
+                const live = readChildMessageFlags(this.ctx);
+                return resolveChildMessagePolicy({
+                    communicationEnhancement: snapshot.communicationEnhancement,
+                    runningChildGuidance: live?.runningChildGuidance ?? snapshot.runningChildGuidance,
+                    completedChildContinuation: live?.completedChildContinuation ?? snapshot.completedChildContinuation,
+                });
+            };
             Object.defineProperty(this, collabHostDelivery, { value: true });
             this.emitLifecycle = createLifecycleEmitter(this.ctx, parent => scopeTarget(this, parent));
             ctx.inject(['agents'], (childCtx) => {
@@ -139,8 +155,25 @@ let SubagentRuntime = (() => {
                     },
                     prepareContinuable: (name, request) => this.prepareContinuable(name, request),
                     observeActivation: (provider, childId, parent) => this.observeActivation(provider, childId, parent),
-                }, () => this.config.maxActiveSubagents.get(), resolveChildMessagePolicy(snapshot));
+                    reserveAutomatic: (sender, targetId) => this.reserveAutomaticInteraction(sender, targetId),
+                }, () => this.config.maxActiveSubagents.get(), resolveChildMessages);
                 this.manager = manager;
+                // Inbox splice runs at acceptance, before a later model request. Initial
+                // delegation uses agent-message attribution, never synthetic human input.
+                childCtx.on('session/event', (session, event) => {
+                    const messages = event.type === 'agent/inbox/spliced'
+                        ? event.data.inserted
+                        : event.type === 'user/message' ? [event.data] : [];
+                    const recipient = childCtx.agents.get(session.id);
+                    if (recipient === undefined)
+                        return;
+                    for (const message of messages) {
+                        const kind = message.source.kind;
+                        if (kind === 'user' || kind === 'user-question-reply') {
+                            this.automaticWakeGuard.reset(this.collaborationFamily(recipient), message.id);
+                        }
+                    }
+                }, { global: true });
                 childCtx.effect(() => () => {
                     /* v8 ignore else -- one injected binding owns the slot until its fiber disposes. */
                     if (this.manager === manager)
@@ -155,6 +188,49 @@ let SubagentRuntime = (() => {
             // Archive admission: this runtime is the owner that knows which live
             // children descend from a Session and how a parent stops them.
             ctx.inject(['agents'], (agentsCtx) => { installSubagentArchiveAdmission(agentsCtx); });
+        }
+        /** Resolve only exact live Team membership or a verified subagent lineage. */
+        collaborationFamily(agent) {
+            const agents = this.ctx.get('agents');
+            const seen = new Set();
+            let current = agent;
+            while (!seen.has(current.id) && agents?.get(current.id) === current) {
+                seen.add(current.id);
+                const teams = this.ctx.get('agentTeams');
+                try {
+                    const member = typeof teams?.tryMembership === 'function' ? teams.tryMembership(current) : undefined;
+                    if (member !== undefined) {
+                        if (member.root === current)
+                            return current.id;
+                        current = member.root;
+                        continue;
+                    }
+                    const parentId = current.session.header.parentSession;
+                    if (parentId === undefined)
+                        return current.id;
+                    const descriptor = foldSubagentDescriptor(current.session.snapshotEvents(current.session.inheritedEventCount));
+                    if (descriptor === undefined)
+                        return undefined;
+                    const parent = agents.get(parentId);
+                    if (parent === undefined)
+                        return undefined;
+                    current = parent;
+                }
+                catch {
+                    return undefined;
+                }
+            }
+            return undefined;
+        }
+        /** Reserve one explicitly automatic edge; unknown identities are not limited. */
+        reserveAutomaticInteraction(sender, targetId) {
+            const agents = this.ctx.get('agents');
+            let family = agents?.get(sender.id) === sender && sender.id !== targetId
+                ? this.collaborationFamily(sender) : undefined;
+            const target = agents?.get(targetId);
+            if (target !== undefined && this.collaborationFamily(target) !== family)
+                family = undefined;
+            return this.automaticWakeGuard.reserve(family, this.automaticWakeLimit);
         }
         /**
          * Whether model and host callers may select `queue` instead of steer.
@@ -210,6 +286,32 @@ let SubagentRuntime = (() => {
          */
         async waitForChildren(parent) {
             return this.manager?.waitForChildren(parent) ?? false;
+        }
+        /**
+         * Read authoritative process-local descendant work, excluding entire selected branches.
+         * @param parent - exact live caller, not merely a matching durable id.
+         * @param excludedIds - Team nodes whose complete managed subtrees are omitted.
+         * @returns a detached snapshot; an unassembled manager cannot own child work.
+         */
+        childActivity(parent, excludedIds) {
+            if (this.ctx.get('agents')?.get(parent.id) !== parent) {
+                throw new SubagentError('child activity requires the exact live parent agent', 'UNAUTHORIZED');
+            }
+            return this.manager?.childActivity(parent, excludedIds) ?? { runningIds: [], preparing: false };
+        }
+        /**
+         * Subscribe synchronously, then read childActivity to avoid losing a transition.
+         * No initial edge is fabricated. Cancellation belongs to the caller's disposer.
+         * @param parent - exact live caller observing its managed descendants.
+         * @param excludedIds - Team nodes and branches omitted from notifications.
+         * @param onChange - isolated callback for relevant activity changes.
+         * @returns an idempotent subscription cleanup, including without a manager.
+         */
+        observeChildActivity(parent, excludedIds, onChange) {
+            if (this.ctx.get('agents')?.get(parent.id) !== parent) {
+                throw new SubagentError('child activity requires the exact live parent agent', 'UNAUTHORIZED');
+            }
+            return this.manager?.observeChildActivity(parent, excludedIds, onChange) ?? (() => { });
         }
         /**
          * Steer one model-authored message to the sender's direct parent or direct

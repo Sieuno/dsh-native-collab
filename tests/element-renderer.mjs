@@ -10,6 +10,11 @@ export function elementRenderer() {
    if (!(index in instance.hooks)) instance.hooks[index]=typeof initial==='function'?initial():initial
    return [instance.hooks[index],value=>{instance.hooks[index]=typeof value==='function'?value(instance.hooks[index]):value}]
   },
+  useRef(initial) {
+   const instance=instances.get(active),index=cursor++
+   if(!(index in instance.hooks))instance.hooks[index]={current:initial}
+   return instance.hooks[index]
+  },
   useEffect(callback,deps) {
    const instance=instances.get(active),index=cursor++,previous=instance.hooks[index]
    if (previous && deps && deps.length===previous.deps?.length && deps.every((value,i)=>Object.is(value,previous.deps[i])))return

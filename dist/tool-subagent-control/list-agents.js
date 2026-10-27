@@ -43,16 +43,13 @@ function project(agents, entry, position) {
 export function apply(ctx) {
     ctx.tools.register(defineTool({
         name: 'list_agents',
-        description: 'List subagents you started, with their ids, labels, and status. '
-            + 'running means it is working; inactive means it is not currently working. '
-            + 'You will be notified when a subagent finishes; there is no need to keep checking its status. '
-            + 'Use send_message to continue the conversation.',
+        description: 'List subagents you started, including their IDs, labels, and status (running or inactive). '
+            + 'You will be notified when a subagent finishes.',
         parameters: {
             scope: {
                 type: 'string',
                 enum: ['children', 'descendants'],
-                description: 'children (default) lists direct children, which accept send_message in any status. '
-                    + 'descendants lists the whole tree below you with each entry\'s parent session id and depth; entries deeper than 1 accept only interrupt_agent.',
+                description: 'children (default) lists direct child agents. descendants lists the full subtree below you.',
             },
         },
         output: {

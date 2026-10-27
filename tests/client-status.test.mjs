@@ -1,22 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
-import { runInNewContext } from 'node:vm'
-import { clientRequire, clientContext } from './browser-fixture.mjs'
-const file = new URL('../dist/client.js', import.meta.url)
-function visit(node, predicate, found = []) {
-  if (Array.isArray(node)) { for (const child of node) visit(child, predicate, found) }
-  else if (node && typeof node === 'object') {
-    if (predicate(node)) found.push(node)
-    visit(node.children, predicate, found)
-    visit(node.props?.children, predicate, found)
-    visit(node.props?.footer, predicate, found)
-  }
-  return found
-}
+import { clientRequire, clientContext, clientModule, visit } from './browser-fixture.mjs'
 async function load(React, remote) {
-  let spec
-  runInNewContext(await readFile(file, 'utf8'), { window: { __ModuleLoader__: { load(value) { spec = value } } } })
+  const spec = await clientModule({}, { emitted: true })
   const plugin = spec.factory(clientRequire(React))
   const registrations = []
   const providers = []
@@ -28,18 +14,18 @@ async function load(React, remote) {
   for (const provider of providers) provider()
   return { spec, plugin, registrations, cleanup }
 }
-test('browser entry mounts its namespace and locale before registering five supported slots', async () => {
+test('browser entry mounts its namespace and locale before registering four supported slots without an installation popup', async () => {
   let calls = 0
   const React = { Fragment: 'fragment', useState: initial => [initial, () => {}], createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) }
-  const { spec, plugin, registrations, cleanup } = await load(React, { collabUi: { async status() { calls++; return { rows: [] } } } })
+  const { spec, plugin, registrations, cleanup } = await load(React, { collabUi: { async status() { calls++; return { profileName: null, hmrEnabled: null, rows: [], desired: 'unchanged', pendingRestart: 'unknown', writeSupport: 'unsupported', operationError: 'transaction-unavailable', error: null, assembly: null } } } })
   assert.equal(spec.id, '@sieuno/dsh-native-collab')
   assert.deepEqual([...plugin.inject], ['slots', 'remote', 'locale'])
   assert.equal(calls, 0)
-  assert.deepEqual(registrations.map(row => row.contract.name), ['plugins.bundle.config', 'plugins.detail.badge', 'plugins.detail.section', 'plugins.row.config', 'plugins.bundle.activation'])
+  assert.deepEqual(registrations.map(row => row.contract.name), ['plugins.bundle.config', 'plugins.detail.badge', 'plugins.detail.section', 'plugins.row.config'])
   assert.equal(registrations[0].contract.key, '@sieuno/dsh-native-collab')
   const injected = registrations[0].contract.inject()
   assert.equal(typeof injected.readStatus, 'function')
-  assert.deepEqual(await injected.readStatus(), { rows: [] })
+  assert.deepEqual(await injected.readStatus(), { profileName: null, hmrEnabled: null, rows: [], desired: 'unchanged', pendingRestart: 'unknown', writeSupport: 'unsupported', operationError: 'transaction-unavailable', error: null, assembly: null })
   assert.equal(calls, 1)
   const page = registrations[0].component({ view: 'page', t: key => key, ...injected })
   assert.equal(visit(page, node => node.props?.key === 'settings').length, 1)

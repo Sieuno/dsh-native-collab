@@ -2,9 +2,9 @@
  * Derived delegation apply.
  * Tool schema, provider lifecycle, preset checks, and startActivation forwarding
  * follow DeepSeek Harness dsh-v0.2.1-rc.2 packages/subagent/tool-subagent (MIT).
- * Derived differences: compatibility ON uses the native Session snapshot; OFF reads
- * the live Host allowlist. An explicit model-enhancement overlay off stays native,
- * not none. Fork remains none.
+ * Derived differences: each selection uses the current three-way modelSource:
+ * the conversation snapshot, live child-model settings, or all live providers.
+ * An explicit model-enhancement overlay off stays native. Fork remains none.
  *
  * @module @dsh-native-collab/tool-subagent
  */
@@ -12,20 +12,37 @@ import z from '@deepseek-ai/schemastery';
 import { scopeChainOf, scopeOf } from '@deepseek-ai/dsh-scope';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { SessionSeq } from '@deepseek-ai/dsh-session';
-import { requireAssemblySnapshot, resolveOrdinarySelectionKind } from '../subagent/index.js';
+import { assertModelRouteAllowed, readChildMessageFlags, readCurrentModelSource, requireAssemblySnapshot } from '../subagent/index.js';
 import { assertSubagentMaxDepth, delegationDepthOf, parentAgentOptionsForDelegation, } from '@deepseek-ai/dsh-subagent';
-import { assertAllowedModelSelection, hasConfiguredLlmSelection, hasDelegationModelRequest, preflightChildLlmRoute, requestedAgentOptions, } from "./model-selection.js";
-import { registerListSubagentModels } from "./list-models.js";
+import { hasConfiguredLlmSelection, hasDelegationModelRequest, preflightChildLlmRoute, requestedAgentOptions, } from "./model-selection.js";
 import { registerLiveListSubagentModels } from "./live-list.js";
 import { SubagentPresetSelection } from "./preset-selection.js";
 import { recordSubagentModelSelection, subagentModelSelectionProjectionDefinition, subagentModelSelectionPolicy, } from "./model-selection-state.js";
 const delegationTools = new Set();
+/**
+ * Model-facing steering note for running and finished subagents. The live
+ * sub-options select the branch; with both off no sentence is printed at all.
+ * @param flags - live child-message sub-options, or undefined when unavailable.
+ * @returns the sentence appended to the delegation note, or an empty string.
+ */
+export function subagentMessagingGuidance(flags) {
+    if (flags?.completedChildContinuation === true) {
+        return ' For any running subagent, `send_message` can queue a message or force an interruption into its'
+            + ' current work to redirect it; for an idle subagent, the same call assigns a new task.';
+    }
+    if (flags?.runningChildGuidance === true) {
+        return ' For any running subagent, `send_message` can queue a message or force an interruption into its'
+            + ' current work to redirect it.';
+    }
+    return '';
+}
 /** Loader schema. `ownsDiscovery` is set by the entry, not by cordis.yml. */
 export function configSchema(toolNameDefault) {
     return z.object({
         provider: z.string().default('subagent'),
         toolName: z.string().default(toolNameDefault),
-        nativeModelSelectionCompatibility: z.boolean().default(false),
+        nativeModelSelectionCompatibility: z.boolean(),
+        modelSource: z.union(['conversation', 'settings', 'all']),
         agentOptions: z.object({
             provider: z.string(),
             model: z.string(),
@@ -40,22 +57,19 @@ export function configSchema(toolNameDefault) {
 function providerWording(inheritsConversation) {
     if (inheritsConversation) {
         return {
-            description: 'Delegate a task to a subagent that inherits this conversation: a child agent seeded with all '
-                + 'completed turns so far (it does not see the current in-flight turn). Use this when the subtask '
-                + 'builds on this conversation\'s context — a follow-up analysis, '
-                + 'a review, a continuation — without consuming this conversation\'s context for the work itself. '
-                + 'You receive its result, not its intermediate steps.',
-            promptDescription: 'The task for the subagent. It already sees this conversation\'s completed turns, so build on them '
-                + 'freely and state only what is new.',
+            description: 'Delegate a task to a subagent that inherits this conversation context. Best for bounded work '
+                + 'benefiting from prior context (subagent or subagent_fork). Prefer subagents over spawn_teammate unless '
+                + 'the work requires a persistent named Team member, direct messaging, or shared Team tasks. '
+                + 'Team members join a named roster and shared-task lifecycle; subagents are independently managed under a subagent id.',
+            promptDescription: 'The task for the subagent. Completed turns are already inherited, so specify only what is new.',
         };
     }
     return {
-        description: 'Delegate a self-contained task to a subagent (a separate agent that works in its own context) '
-            + 'to offload focused, independent work — research, a scoped '
-            + 'implementation, an analysis — so it does not consume this conversation\'s context. The subagent '
-            + 'returns its result, not its intermediate steps.',
-        promptDescription: 'The complete, self-contained task for the subagent. It does not share this '
-            + 'conversation\'s context, so include everything it needs.',
+        description: 'Delegate an independent task to a subagent in its own context. For a self-contained bounded task, use subagent '
+            + 'or subagent_fork to return a result without joining a Team roster. Use spawn_teammate when '
+            + 'a persistent named member or shared Team tasks are needed; Team members join a named roster and shared-task lifecycle, '
+            + 'while subagents are independently managed under a subagent id. Returns the final result.',
+        promptDescription: 'The complete, self-contained task for the subagent, including all necessary context and instructions.',
     };
 }
 /**
@@ -79,7 +93,13 @@ export async function applyDerivedDelegation(ctx, config, session) {
     if (config.maxDepth !== 'provider-managed')
         assertSubagentMaxDepth(config.maxDepth);
     const toolName = config.toolName ?? 'subagent';
-    const kind = resolveOrdinarySelectionKind(config.ownsDiscovery, config.nativeModelSelectionCompatibility, requireAssemblySnapshot(ctx));
+    const assembly = requireAssemblySnapshot(ctx);
+    const initialSource = config.modelSource ?? assembly.modelSource ?? ((config.nativeModelSelectionCompatibility ?? assembly.nativeModelSelectionCompatibility) === false
+        ? 'settings'
+        : 'conversation');
+    const kind = config.ownsDiscovery === false
+        ? 'none'
+        : initialSource === 'conversation' ? 'native' : 'live';
     const selectionCapable = kind !== 'none';
     ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition);
     const assertSubagentProviderConfiguration = (subagentProvider) => {
@@ -103,19 +123,16 @@ export async function applyDerivedDelegation(ctx, config, session) {
     if (initialProvider !== undefined)
         assertSubagentProviderConfiguration(initialProvider);
     const install = (runtimeCtx, binding) => {
-        const modelSelectionEnabled = binding.kind === 'live' || (binding.kind === 'native' && binding.policy !== undefined);
-        if (binding.kind === 'native' && binding.policy !== undefined)
-            registerListSubagentModels(runtimeCtx, binding.policy);
-        if (binding.kind === 'live')
-            registerLiveListSubagentModels(runtimeCtx);
+        // Keep route fields present for the life of this tool; modelSource is a live UI setting and may widen later.
+        const modelSelectionEnabled = binding.kind !== 'none';
+        if (binding.kind !== 'none')
+            registerLiveListSubagentModels(runtimeCtx, binding.policy);
         let mounted;
         const mount = (subagentProvider) => {
             assertSubagentProviderConfiguration(subagentProvider);
             const wording = providerWording(subagentProvider.inheritsParentContext);
             const providerRouteDefaults = subagentProvider.agentRouteDefaults;
-            const selectionDescription = providerRouteDefaults !== undefined
-                ? ' Child LLM selection is optional. Omit `provider`, `model`, and `reasoning_effort` to use configured child defaults and this provider\'s route defaults. Supply `provider` and `model` together after using `list_subagent_models` to inspect advertised routes and efforts. Changing the effective route without naming an effort uses the selected model\'s default effort.'
-                : ' Child LLM selection is optional. Omit `provider`, `model`, and `reasoning_effort` to use configured child defaults and inherit compatible missing values from the parent Agent. Supply `provider` and `model` together after using `list_subagent_models` to inspect advertised routes and efforts. Changing the effective route without naming an effort uses the selected model\'s default effort.';
+            const selectionDescription = ' Child LLM selection is optional. Omit `provider`, `model`, and `reasoning_effort` to inherit defaults. Supply `provider` and `model` together to use a specific model.';
             const choiceDescription = !modelSelectionEnabled
                 ? ''
                 : selectionDescription
@@ -125,20 +142,20 @@ export async function applyDerivedDelegation(ctx, config, session) {
             const definition = defineTool({
                 name: toolName,
                 description: wording.description
-                    + ' This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes.'
+                    + ' Starts an independently managed subagent and returns its id; you will be notified upon completion.'
                     + (subagentProvider.prepareContinuable !== undefined
-                        ? ' The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.'
-                        : ' The completion notice includes its final answer. This backend does not accept follow-up messages.')
+                        ? ' Use `send_message` to steer it while running or continue after it finishes.'
+                        : '')
                     + choiceDescription,
                 parameters: {
                     cwd: {
                         type: 'string',
-                        description: 'Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.',
+                        description: 'Initial working directory for the subagent. Defaults to current directory.',
                     },
                     description: {
                         type: 'string',
                         required: true,
-                        description: 'A short (3-5 word) description of the delegated task, for display.',
+                        description: 'Short (3-5 word) summary of the delegated task for display.',
                     },
                     prompt: {
                         type: 'string',
@@ -155,19 +172,15 @@ export async function applyDerivedDelegation(ctx, config, session) {
                     ...modelSelectionEnabled ? {
                         provider: {
                             type: 'string',
-                            description: binding.kind === 'live'
-                                ? 'LLM provider route for the child. Checked against the current host allowlist when supplied. Omit both provider and model to inherit.'
-                                : 'LLM provider route for the child. Supply together with model; omit both to use configured child defaults or inherit the parent route.',
+                            description: 'LLM provider for the subagent. Supply together with model; omit both to use defaults or inherit.',
                         },
                         model: {
                             type: 'string',
-                            description: binding.kind === 'live'
-                                ? 'Model id interpreted by provider. An id absent from the advertised catalog remains selectable when the current host allowlist includes it.'
-                                : 'Model id interpreted by provider. Supply together with provider; omit both to use configured child defaults or inherit the parent route.',
+                            description: 'LLM model ID for the subagent. Supply together with provider; omit both to use defaults or inherit.',
                         },
                         reasoning_effort: {
                             type: 'string',
-                            description: 'Adapter-owned reasoning effort for the effective child route. Omit to inherit.',
+                            description: 'Optional reasoning effort for the model. Omit to use model default.',
                         },
                     } : {},
                 },
@@ -190,25 +203,32 @@ export async function applyDerivedDelegation(ctx, config, session) {
                     const agentPreset = presets.resolve(args);
                     const modelRequest = args;
                     const parentOptions = parentAgentOptionsForDelegation(parent);
-                    const requiresRoutePreflight = hasDelegationModelRequest(modelRequest)
+                    const requiresRoutePreflight = modelSelectionEnabled || hasDelegationModelRequest(modelRequest)
                         || hasConfiguredLlmSelection(config.agentOptions);
                     const configuredChildAgentOptions = requiresRoutePreflight && providerRouteDefaults !== undefined
                         ? { ...providerRouteDefaults, ...config.agentOptions }
                         : config.agentOptions;
                     const requestedChildAgentOptions = requestedAgentOptions(parentOptions, configuredChildAgentOptions, modelRequest, modelSelectionEnabled);
-                    if (binding.kind === 'native') {
-                        assertAllowedModelSelection(binding.policy, parentOptions, requestedChildAgentOptions, modelRequest);
-                    }
-                    else if (binding.kind === 'live' && hasDelegationModelRequest(modelRequest)) {
-                        const settingsService = runtimeCtx.get('subagentModelSelection');
-                        if (settingsService === undefined) {
-                            throw new Error('cannot authorize child LLM selection because the host subagentModelSelection service is unavailable');
+                    // The allowlist constrains explicit model selection, not an omitted
+                    // route that inherits the native parent's/default child configuration.
+                    if (modelSelectionEnabled && hasDelegationModelRequest(modelRequest)) {
+                        const source = readCurrentModelSource(runtimeCtx);
+                        if (source === undefined) {
+                            throw new Error('cannot authorize child LLM selection because the collabUi model-source service is unavailable');
                         }
-                        const current = settingsService.current();
-                        if (current.enabled !== true) {
-                            throw new Error('child LLM selection is disabled by the current host setting');
+                        const effectiveRoute = {
+                            provider: requestedChildAgentOptions?.provider ?? parentOptions.provider ?? '',
+                            model: requestedChildAgentOptions?.model ?? parentOptions.model ?? '',
+                        };
+                        let currentSettings;
+                        const llm = runtimeCtx.get('llm');
+                        if (source === 'settings') {
+                            const settingsService = runtimeCtx.get('subagentModelSelection');
+                            if (settingsService === undefined)
+                                throw new Error('cannot authorize child LLM selection because the host subagentModelSelection service is unavailable');
+                            currentSettings = settingsService.current();
                         }
-                        assertAllowedModelSelection({ routes: current.allowedModels }, parentOptions, requestedChildAgentOptions, modelRequest);
+                        assertModelRouteAllowed(source, effectiveRoute, binding.policy?.routes, currentSettings, source === 'all' && llm !== undefined ? llm.listProviders().map(provider => provider.id) : undefined);
                     }
                     if (requiresRoutePreflight) {
                         const llm = runtimeCtx.get('llm');
@@ -278,7 +298,10 @@ export async function applyDerivedDelegation(ctx, config, session) {
                 if (visible[0] !== toolName)
                     return '';
                 const names = visible.map(name => `\`${name}\``).join(' or ');
-                return `Start independent delegations with ${names} together in one assistant message and continue useful work while they run.`;
+                return `Start independent delegations with ${names} together in one assistant message and continue useful work while they run.`
+                    + ' Ask the subagent to report progress at checkpoints and to send a result message when it finishes;'
+                    + ' use `wait_agent` only when you specifically must pause all other activity until it completes.'
+                    + subagentMessagingGuidance(readChildMessageFlags(runtimeCtx));
             },
         });
         runtimeCtx.systemPrompt.context({
@@ -311,8 +334,9 @@ export async function applyDerivedDelegation(ctx, config, session) {
         throw new Error('tool-subagent: child model selection requires the host subagentModelSelection service');
     }
     const selectForSession = (target) => {
-        if (kind !== 'native' || settings === undefined)
-            return undefined;
+        if (settings === undefined) {
+            throw new Error('tool-subagent: model source requires the host subagentModelSelection service');
+        }
         const freshSession = target.firstLiveSeq === 0
             && target.eventAt(SessionSeq(0))?.type !== 'session/end-seed';
         let allowedModels = subagentModelSelectionPolicy(ctx.sessionProjections, target);
@@ -336,7 +360,8 @@ export async function applyDerivedDelegation(ctx, config, session) {
         return allowedModels === undefined ? undefined : { routes: allowedModels };
     };
     if (session !== undefined) {
-        install(ctx, kind === 'native' ? { kind: 'native', policy: selectForSession(session) } : { kind });
+        const policy = kind === 'none' ? undefined : selectForSession(session);
+        install(ctx, kind === 'native' ? { kind: 'native', policy } : kind === 'live' ? { kind: 'live', policy } : { kind });
         return;
     }
     if (kind === 'live' && compositionScope === undefined) {
@@ -361,9 +386,10 @@ export async function applyDerivedDelegation(ctx, config, session) {
         installing.add(candidate);
         let fiber;
         try {
+            const policy = kind === 'none' ? undefined : selectForSession(candidate.session);
             const binding = kind === 'native'
-                ? { kind: 'native', policy: selectForSession(candidate.session) }
-                : { kind };
+                ? { kind: 'native', policy }
+                : kind === 'live' ? { kind: 'live', policy } : { kind };
             fiber = candidate.ctx.inject(['tools', 'subagents', 'systemPrompt'], async (runtimeCtx) => {
                 if (presets.configured)
                     await presets.validate(ctx);

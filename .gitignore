@@ -3,3 +3,5 @@ dist/.build-tmp/
 *.tgz
 .env*
 .DS_Store
+
+.test-artifacts/

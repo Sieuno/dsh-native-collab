@@ -1,7 +1,7 @@
 {
   "name": "@sieuno/dsh-native-collab",
-  "version": "0.2.1",
-  "description": "Flexible Agent Teams and model selection for DSH, with enhanced communication between parent and child conversations. 让 DSH 的 Agent Team 更灵活：灵活选择模型，增强父子对话通信。 Unofficial community plugin / 非官方社区插件。",
+  "version": "0.2.2-ux.6",
+  "description": "Deepseek Harness Agent协作增强（基于原版插件）. DeepSeek Harness agent collaboration enhancements (based on the original plugin). Unofficial community plugin / 非官方社区插件。",
   "icon": "./icons/subagent.svg",
   "type": "module",
   "license": "MIT",
@@ -28,6 +28,7 @@
     "packages/tool-subagent/LICENSE",
     "scripts/check-release.mjs",
     "scripts/make-overlays.mjs",
+    "TESTING.md",
     "cordis.patch.yml",
     "icons/*.svg",
     "README.md",
@@ -35,11 +36,11 @@
     "THIRD_PARTY_NOTICES.md",
     "CHANGELOG.md",
     "LICENSE",
-    "docs/images/*.png",
-    "examples/*.yml",
     "README.en.md",
     "docs/INSTALL.md",
-    "docs/FAQ.md"
+    "docs/FAQ.md",
+    "docs/INSTALL.en.md",
+    "docs/FAQ.en.md"
   ],
   "exports": {
     ".": "./dist/agent-team/bootstrap.js",
@@ -86,9 +87,15 @@
     }
   },
   "scripts": {
-    "check": "node scripts/check-release.mjs",
     "validate:package": "node scripts/check-release.mjs",
-    "pack:dry": "npm pack --dry-run"
+    "check:load": "node scripts/check-load.mjs",
+    "check:types": "node scripts/check-types.mjs",
+    "pack:dry": "npm pack --dry-run",
+    "build": "node scripts/emit-dist.mjs",
+    "test": "node scripts/test.mjs unit",
+    "test:sdk": "node scripts/test.mjs sdk",
+    "test:client": "node scripts/test.mjs client",
+    "test:discovery": "node scripts/test.mjs discovery"
   },
   "dependencies": {
     "zod": "4.4.3",
@@ -96,7 +103,6 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.5",
-    "@deepseek-ai/dsh-app-boot": ">=0.2.1-rc.1 <0.2.2-0",
     "@deepseek-ai/dsh-atomic-write": ">=0.2.1-rc.1 <0.2.2-0",
     "@deepseek-ai/dsh-agent": ">=0.2.1-rc.1 <0.2.2-0",
     "@deepseek-ai/dsh-agent-preset-registry": ">=0.2.1-rc.1 <0.2.2-0",
@@ -126,9 +132,6 @@
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
-      "optional": true
-    },
-    "@deepseek-ai/dsh-app-boot": {
       "optional": true
     },
     "@deepseek-ai/dsh-atomic-write": {

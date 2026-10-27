@@ -3,7 +3,6 @@
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { TeamMembership } from './roster.ts'
 import { TeamError } from './error.ts'
-import type { TeamBudget } from './budget.ts'
 import type { TeamJournal } from './journal.ts'
 import type { TeamState } from './projection.ts'
 import { resolveActiveMember } from './roster.ts'
@@ -34,7 +33,6 @@ export class TeamTaskBoard {
   constructor(
     private readonly journal: TeamJournal,
     private readonly maxTasks: number,
-    private readonly budget: TeamBudget,
   ) {}
 
   /**
@@ -46,7 +44,6 @@ export class TeamTaskBoard {
   async create(membership: TeamMembership, request: CreateTeamTaskRequest): Promise<TeamTaskView> {
     const { root } = membership
     return this.journal.transact(root.id, async () => {
-      await this.budget.ensureStarted(root)
       const state = this.journal.state(root)
       const active = state.tasks.filter(task => task.status !== 'deleted').length
       if (active >= this.maxTasks) {

@@ -1,10 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { checkRoleExports } from '../scripts/check-release.mjs'
+import { ASSEMBLY_ROLES } from '../dist/agent-team/assembly-layout.js'
 
 const packageName = '@sieuno/dsh-native-collab'
 const root = dirname(fileURLToPath(new URL('../package.json', import.meta.url)))
@@ -47,21 +49,68 @@ test('public runtime, locale and icon export paths resolve to shipped files', as
   for (const lang of ['en', 'zh']) await resolvesTo(`locale/${lang}.json`, `./locale/${lang}.json`)
 })
 
-test('default patch activates only the bare UI anchor and keeps five feature rows disabled', async () => {
+test('release check rejects wrong existing targets and missing role exports', async () => {
+  assert.deepEqual(checkRoleExports(manifest, ASSEMBLY_ROLES), [])
+  const cases = [
+    ['./subagent', './dist/agent-team/index.js', 'dist/agent-team/index.js'],
+    ['./subagent/icon', './icons/agent-team.svg', 'icons/agent-team.svg'],
+    ['./subagent/locale/*.json', './packages/agent-team/locale/*.json', 'packages/agent-team/locale/en.json'],
+  ]
+  for (const [key, wrong, existing] of cases) {
+    await stat(join(root, existing))
+    const altered = structuredClone(manifest)
+    altered.exports[key] = wrong
+    assert.ok(checkRoleExports(altered, ASSEMBLY_ROLES).some(issue => issue.includes(`export mapping mismatch for ${key}:`)), key)
+    delete altered.exports[key]
+    assert.ok(checkRoleExports(altered, ASSEMBLY_ROLES).some(issue => issue.includes(`export mapping mismatch for ${key}:`)), `missing ${key}`)
+  }
+  assert.ok(checkRoleExports(manifest, ASSEMBLY_ROLES.slice(1)).some(issue => issue.includes('assembly role modules')))
+})
+
+test('default patch declares exactly one management anchor with non-insert startup overrides', async () => {
   assert.equal(manifest.dsh?.bundle?.patch, './cordis.patch.yml')
   const patch = await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
-  const entries = [...patch.matchAll(/- id: "([^"]+)"\s*\n\s+name: "([^"]+)"\s*\n\s+disabled: (\w+)/g)]
-  assert.equal(entries.length, 8)
-  const anchor = entries.find(([, id]) => id === 'dsh-native-collab-ui')
-  assert.ok(anchor)
-  assert.equal(anchor[2], packageName)
-  assert.equal(anchor[3], 'false')
-  for (const [module, id] of modules.map(([module, id]) => [module, id])) {
-    const entry = entries.find(([, actualId]) => actualId === id)
-    assert.ok(entry, `patch row ${id}`)
-    assert.equal(entry[2], `@sieuno/dsh-native-collab/${module}`)
-    assert.equal(entry[3], 'true', `${id} must default disabled`)
+  const { parse } = await import('yaml')
+  const parsed = parse(patch, { customTags: [{ tag: 'tag:yaml.org,2002:js', resolve: value => ({ __jsExpr: value }) }] })
+  const inserted = parsed.flatMap(row => row.insert ?? [])
+  assert.equal(inserted.length, 1)
+  assert.deepEqual(inserted[0], { id: 'dsh-native-collab-ui', name: packageName, disabled: false, config: { runtimeMode: 'managed' } })
+  assert.equal(parsed.filter(row => row.inject?.includes('subagents')).length, 4)
+  assert.equal(parsed.filter(row => row.disabled?.__jsExpr).length, 3)
+})
+
+test('publication metadata, lockfile, and packaging controls preserve public runtime identity', async () => {
+  const lock = JSON.parse(await readFile(new URL('../package-lock.json', import.meta.url), 'utf8'))
+  assert.equal(manifest.name, packageName)
+  assert.match(manifest.version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/)
+  assert.equal(lock.version, manifest.version)
+  assert.equal(lock.packages[''].version, manifest.version)
+  assert.notEqual(manifest.private, true)
+  assert.equal(manifest.publishConfig.access, 'public')
+  assert.equal(manifest.publishConfig.registry, 'https://registry.npmjs.org/')
+  assert.equal(manifest.engines.node, '>=22.19.0')
+  assert.equal(manifest.engines.dsh, '>=0.2.1-rc.1 <0.2.2-0')
+  assert.equal(manifest.scripts['validate:package'], 'node scripts/check-release.mjs')
+  for (const file of ['docs/INSTALL.md', 'docs/FAQ.md', 'TESTING.md']) assert.ok(manifest.files.includes(file))
+  for (const file of ['HANDOFF.md', '.npmrc']) assert.ok(!manifest.files.includes(file))
+  const npmrc = (await readFile(new URL('../.npmrc', import.meta.url), 'utf8')).trim().split(/\r?\n/)
+  assert.deepEqual(npmrc, ['auto-install-peers=false', 'verify-deps-before-run=false', 'ignore-scripts=true'])
+  assert.ok(!/(?:_authToken|password|registry|https?:)/i.test(npmrc.join('\n')))
+})
+
+test('all declared exports and generated JavaScript modules exist in the distribution', async () => {
+  for (const target of Object.values(manifest.exports)) {
+    if (typeof target === 'string' && target.startsWith('./') && !target.includes('*')) await stat(join(root, target))
   }
+  async function walk(dir) {
+    const entries = await readdir(dir, { withFileTypes: true })
+    return (await Promise.all(entries.map(entry => entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)]))).flat()
+  }
+  const emitted = (await walk(join(root, 'dist'))).filter(file => file.endsWith('.js'))
+  const sources = (await walk(join(root, 'packages'))).filter(file => file.endsWith('.ts') && !file.endsWith('.d.ts') && /[\\/]src[\\/]/.test(file))
+  assert.equal(emitted.length, sources.length + 1)
+  assert.equal(manifest.exports['./client'], './dist/client.js')
+  assert.equal(manifest.dsh.client.platform, 'web')
 })
 
 test('runtime and host peer dependency declarations avoid duplicate host core', () => {
@@ -74,32 +123,12 @@ test('runtime and host peer dependency declarations avoid duplicate host core', 
   assert.equal('bundledDependencies' in manifest, false)
 })
 
-test('manual next-start overlays still contain only the five feature rows', async () => {
-  const out = await mkdtemp(join(tmpdir(), 'dsh-native-collab-overlays-'))
+test('retired root-only generator refuses without emitting partial configuration', async () => {
+  const out = await mkdtemp(join(tmpdir(), 'dsh-native-collab-retired-overlays-'))
   try {
     const result = spawnSync(process.execPath, [join(root, 'scripts/make-overlays.mjs'), '--out', out], { stdio: 'inherit' })
-    assert.equal(result.status, 0, result.stderr)
-    const expected = [
-      ['subagent', 'dsh-native-collab-subagent'],
-      ['tool-subagent-control', 'dsh-native-collab-tool-subagent-control'],
-      ['tool-subagent-list-agents', 'dsh-native-collab-tool-subagent-list-agents'],
-      ['agent-team', 'dsh-native-collab-agent-team'],
-      ['tool-agent-team', 'dsh-native-collab-tool-agent-team'],
-    ]
-    for (const [file, enabled] of [['root-enable.example.patch.yml', true], ['root-restore.example.patch.yml', false]]) {
-      const text = await readFile(join(out, file), 'utf8')
-      const rows = [...text.matchAll(/- id: "([^"]+)"\s*\n\s+disabled: (true|false)/g)]
-      assert.equal(rows.length, 10, `${file} must contain five native/feature pairs`)
-      for (let i = 0; i < expected.length; i += 1) {
-        const [nativeId, featureId] = expected[i]
-        assert.equal(rows[i * 2][1], nativeId)
-        assert.equal(rows[i * 2][2], enabled ? 'true' : 'false')
-        assert.equal(rows[i * 2 + 1][1], featureId)
-        assert.equal(rows[i * 2 + 1][2], enabled ? 'false' : 'true')
-      }
-      assert.ok(!text.includes('dsh-native-collab-ui'), 'UI bootstrap row must not be included in overlays')
-    }
-  } finally {
-    await rm(out, { recursive: true, force: true })
-  }
+    assert.equal(result.status, 2)
+    const { readdir } = await import('node:fs/promises')
+    assert.deepEqual(await readdir(out), [])
+  } finally { await rm(out, { recursive: true, force: true }) }
 })

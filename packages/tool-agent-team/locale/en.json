@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Team Tools",
-    "description": "Give agents tools to coordinate members, exchange messages, and manage shared tasks. Enabling this derived row replaces native tool-agent-team; both are not loaded."
+    "title": "Team tools",
+    "description": "Provides tools to add teammates, send messages, and manage shared tasks."
   }
 }

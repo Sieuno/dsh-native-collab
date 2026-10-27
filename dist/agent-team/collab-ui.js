@@ -32,31 +32,18 @@ var __esDecorate = (this && this.__esDecorate) || function (ctor, descriptorIn, 
     if (target) Object.defineProperty(target, contextIn.name, descriptor);
     done = true;
 };
-import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
-function invalidBootInput(method, field) {
-    // Use the public cross-realm Remote failure, not a generic TypeError that the
-    // Gateway would turn into gateway/internal. This is owner-side validation,
-    // independent of the browser's strict descriptor and generator availability.
-    throw new RemoteError('collab-ui/input-invalid', `Invalid ${field}`, { endpoint: `collabUi/${method}`, field });
-}
-const PACKAGE = '@sieuno/dsh-native-collab';
-const ROWS = [
-    { id: 'dsh-native-collab-subagent', moduleName: '@sieuno/dsh-native-collab/subagent' },
-    { id: 'dsh-native-collab-tool-subagent-control', moduleName: '@sieuno/dsh-native-collab/tool-subagent-control' },
-    { id: 'dsh-native-collab-tool-subagent-list-agents', moduleName: '@sieuno/dsh-native-collab/tool-subagent-control/list-agents' },
-    { id: 'dsh-native-collab-agent-team', moduleName: '@sieuno/dsh-native-collab/agent-team' },
-    { id: 'dsh-native-collab-tool-agent-team', moduleName: '@sieuno/dsh-native-collab/tool-agent-team' },
-    { id: 'dsh-native-collab-tool-subagent', moduleName: '@sieuno/dsh-native-collab/tool-subagent' },
-    { id: 'dsh-native-collab-tool-subagent-fork', moduleName: '@sieuno/dsh-native-collab/tool-subagent/fork' },
-];
-const ENABLE_LINKED = new Set([
-    'dsh-native-collab-subagent',
-    'dsh-native-collab-tool-subagent-control',
-    'dsh-native-collab-tool-subagent-list-agents',
-    'dsh-native-collab-agent-team',
-    'dsh-native-collab-tool-agent-team',
-]);
+import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
+import { ASSEMBLY_ROLES, classifyAssembly } from "./assembly-layout.js";
+import { ManagedRuntime } from "./managed-runtime.js";
+import { installPresetAdapter } from "./preset-adapter.js";
+const ROWS = ASSEMBLY_ROLES;
+const ENABLE_LINKED = new Set(ASSEMBLY_ROLES.filter(row => row.placement === 'runtime').map(row => row.legacyId));
 const COLLAB_UI_BRAND = Symbol.for('@sieuno/dsh-native-collab.collabUi');
+function readModelSource(value) {
+    const current = typeof value === 'object' && value !== null && 'get' in value && typeof value.get === 'function'
+        ? value.get() : value;
+    return current === 'conversation' || current === 'settings' || current === 'all' ? current : undefined;
+}
 function readOverlayFlag(value) {
     if (typeof value === 'boolean')
         return value;
@@ -84,6 +71,7 @@ function captureAssembly(config) {
         modelEnhancement: readOverlayFlag(config?.modelEnhancement),
         communicationEnhancement: readOverlayFlag(config?.communicationEnhancement),
         nativeModelSelectionCompatibility: readOverlayFlag(config?.nativeModelSelectionCompatibility),
+        modelSource: readModelSource(config?.modelSource),
         runningChildGuidance: readOverlayFlag(config?.runningChildGuidance),
         completedChildContinuation: readOverlayFlag(config?.completedChildContinuation),
         teamRequestLimit: readRequestLimit(config?.teamRequestLimit, true),
@@ -120,34 +108,45 @@ let CollabUiService = (() => {
     let _classSuper = TypertRemoteService;
     let _instanceExtraInitializers = [];
     let _status_decorators;
-    let _bootStatus_decorators;
-    let _bootPlan_decorators;
-    let _bootApply_decorators;
     let _preview_decorators;
     return class CollabUiService extends _classSuper {
         static {
             const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
             _status_decorators = [Remote];
-            _bootStatus_decorators = [Remote];
-            _bootPlan_decorators = [Remote];
-            _bootApply_decorators = [Remote];
             _preview_decorators = [Remote];
             __esDecorate(this, null, _status_decorators, { kind: "method", name: "status", static: false, private: false, access: { has: obj => "status" in obj, get: obj => obj.status }, metadata: _metadata }, null, _instanceExtraInitializers);
-            __esDecorate(this, null, _bootStatus_decorators, { kind: "method", name: "bootStatus", static: false, private: false, access: { has: obj => "bootStatus" in obj, get: obj => obj.bootStatus }, metadata: _metadata }, null, _instanceExtraInitializers);
-            __esDecorate(this, null, _bootPlan_decorators, { kind: "method", name: "bootPlan", static: false, private: false, access: { has: obj => "bootPlan" in obj, get: obj => obj.bootPlan }, metadata: _metadata }, null, _instanceExtraInitializers);
-            __esDecorate(this, null, _bootApply_decorators, { kind: "method", name: "bootApply", static: false, private: false, access: { has: obj => "bootApply" in obj, get: obj => obj.bootApply }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _preview_decorators, { kind: "method", name: "preview", static: false, private: false, access: { has: obj => "preview" in obj, get: obj => obj.preview }, metadata: _metadata }, null, _instanceExtraInitializers);
             if (_metadata) Object.defineProperty(this, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
         }
+        // Root entries are imported concurrently. Do not inspect an inventory service
+        // before its provider has activated and fail permanently on a startup race.
+        static inject = ['pluginManager', 'loader'];
         assembly = __runInitializers(this, _instanceExtraInitializers);
-        bootComponent;
+        managedRuntime;
+        currentModelSourceReader;
+        liveChildMessageFlags;
         constructor(ctx, config) {
             super(ctx, 'collabUi');
             Object.defineProperty(this, COLLAB_UI_BRAND, { value: true });
             this.assembly = captureAssembly(config);
-            // Capture the owning plugin Context, never an ephemeral gateway invocation Context.
-            let boot;
-            this.bootComponent = () => boot ??= import('./boot-switch.js').then(module => new module.BootSwitchManager(ctx));
+            this.currentModelSourceReader = () => {
+                const explicit = readModelSource(config?.modelSource);
+                if (explicit !== undefined)
+                    return explicit;
+                return readOverlayFlag(config?.nativeModelSelectionCompatibility) === false ? 'settings' : 'conversation';
+            };
+            // Volatile-only settings are committed into the running references by the
+            // loader, so the two parent-message sub-options are read per admission
+            // instead of being frozen with the rest of the assembly snapshot.
+            this.liveChildMessageFlags = () => ({
+                runningChildGuidance: readOverlayFlag(config?.runningChildGuidance),
+                completedChildContinuation: readOverlayFlag(config?.completedChildContinuation),
+            });
+            // Runtime ownership belongs to this installed entry, not a hidden preference.
+            // Older saved runtimeMode:native must not keep every enhancement inert.
+            installPresetAdapter(ctx, () => ({ model: this.assembly?.modelEnhancement === true, communication: this.assembly?.communicationEnhancement === true }));
+            this.managedRuntime = new ManagedRuntime(ctx, 'managed');
+            ctx.effect(() => () => this.managedRuntime.dispose(), 'collabUi.managedRuntime()');
             // ConfigEditor calls this waterfall before writing YAML. Schemastery treats
             // optional null as absent, so enforce the numeric write contract here, scoped
             // to this exact plugin fiber. Clearing uses the official op:unset path.
@@ -157,8 +156,11 @@ let CollabUiService = (() => {
                 // the exact lifetime within this Context tree without proxy identity drift.
                 if (this.uid !== ctx.fiber.uid)
                     return raw;
-                if (typeof raw === 'object' && raw !== null && 'teamRequestLimit' in raw) {
-                    readRequestLimit(raw.teamRequestLimit);
+                if (typeof raw === 'object' && raw !== null) {
+                    // runtimeMode is a deprecated compatibility field, never a separate
+                    // activation switch or a requirement for saving ordinary preferences.
+                    if ('teamRequestLimit' in raw)
+                        readRequestLimit(raw.teamRequestLimit);
                 }
                 return raw;
             });
@@ -166,6 +168,14 @@ let CollabUiService = (() => {
         /** Startup snapshot frozen by this construction. Not a live subscription. */
         assemblySnapshot() {
             return this.assembly ?? null;
+        }
+        /** Latest volatile source choice; unlike assembly flags this is read per selection operation. */
+        currentModelSource() {
+            return this.currentModelSourceReader();
+        }
+        /** Live parent-message sub-options; volatile fields change without a restart. */
+        childMessageFlags() {
+            return this.liveChildMessageFlags();
         }
         async status() {
             const profile = service(this.ctx, 'profileContext');
@@ -185,15 +195,22 @@ let CollabUiService = (() => {
                 error = 'inventory-unavailable';
             }
             const rows = ROWS.map(target => {
-                const matches = inventory?.filter(row => row.moduleName === target.moduleName) ?? [];
+                const matches = inventory?.filter(row => row.moduleName === target.moduleName || row.moduleName === target.nativeModuleName) ?? [];
                 const row = matches.length === 1 ? matches[0] : undefined;
                 return {
-                    ...target,
+                    id: target.legacyId,
+                    moduleName: target.moduleName,
                     current: row === undefined ? 'unknown' : row.enabled ? 'enabled' : 'disabled',
                     sourceLayer: 'unknown',
                     runtimePhase: row?.fiberPhase ?? null,
                 };
             });
+            const nativeEnabled = ROWS.filter(target => target.placement === 'runtime').filter(target => inventory?.some(row => row.moduleName === target.nativeModuleName && row.enabled)).length;
+            const managedEnabled = ROWS.filter(target => inventory?.some(row => row.moduleName === target.moduleName && row.enabled)).length;
+            const runtime = this.managedRuntime.status();
+            const inventoryKnown = inventory !== undefined && ROWS.filter(target => target.placement === 'runtime')
+                .every(target => inventory.filter(row => row.moduleName === target.nativeModuleName).length === 1);
+            const diagnosis = classifyAssembly(runtime.mode, nativeEnabled, managedEnabled, inventoryKnown, runtime.services.map(service => service.phase));
             return {
                 profileName,
                 hmrEnabled: service(this.ctx, 'hmr') !== undefined,
@@ -204,21 +221,9 @@ let CollabUiService = (() => {
                 operationError: 'transaction-unavailable',
                 error,
                 assembly: this.assembly ?? null,
+                runtime,
+                diagnosis,
             };
-        }
-        /** Explicit next-start state; does not change an active Agent or service assembly. */
-        async bootStatus() { return (await this.bootComponent()).status(); }
-        /** Read-only, concrete target list plus a short-lived, one-shot confirmation token. */
-        async bootPlan(action) {
-            if (action !== 'enable' && action !== 'restore')
-                invalidBootInput('bootPlan', 'action');
-            return (await this.bootComponent()).plan(action);
-        }
-        /** The only startup-cover mutation endpoint: requires an issued, unchanged plan. */
-        async bootApply(planId) {
-            if (typeof planId !== 'string' || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(planId))
-                invalidBootInput('bootApply', 'planId');
-            return (await this.bootComponent()).apply(planId);
         }
         /** Read-only preview; the profile is never written or snapshotted. */
         async preview(action) {

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Derived Subagent Tool",
-    "description": "Delegates a child agent. Off by default. Reads the current host allowlist unless compatibility mode keeps the native Session snapshot."
+    "title": "Start independent subagent",
+    "description": "Starts an independent subagent for a new task, with support for model selection."
   }
 }

@@ -14,15 +14,13 @@ const TASK_GRAPH_ERROR_CODES = {
 export class TeamTaskBoard {
     journal;
     maxTasks;
-    budget;
     /**
      * @param journal - authoritative Lead-log transaction owner.
      * @param maxTasks - maximum non-deleted tasks retained by one Team.
      */
-    constructor(journal, maxTasks, budget) {
+    constructor(journal, maxTasks) {
         this.journal = journal;
         this.maxTasks = maxTasks;
-        this.budget = budget;
     }
     /**
      * Create one unowned pending task in the Team Lead log.
@@ -33,7 +31,6 @@ export class TeamTaskBoard {
     async create(membership, request) {
         const { root } = membership;
         return this.journal.transact(root.id, async () => {
-            await this.budget.ensureStarted(root);
             const state = this.journal.state(root);
             const active = state.tasks.filter(task => task.status !== 'deleted').length;
             if (active >= this.maxTasks) {

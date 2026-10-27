@@ -1,27 +1,68 @@
-# Safe default: activate only the read-only UI anchor; collaboration runtime rows remain disabled.
-# Native DSH rows remain untouched. This patch list does not replace user/profile config.
+# 启动故障排查（给 Agent 与维护者看的注释，不参与运行时求值）：
+# 如果安装、禁用或卸载本插件后 DSH 启动失败，先确认是否有“外部启动覆盖文件”仍在引用本插件。
+# 常见位置：Profile 目录下由本机启动器生成的 *.patch.json 覆盖文件，例如
+#   desktop-next.cordis.patch.json / desktop-next.runtime.patch.json
+# 这类覆盖优先级高于 Profile 的 cordis.patch.yml；插件卸载或回退后，其中残留的
+#   @sieuno/dsh-native-collab（含 /subagent、/agent-team、/tool-* 子路径）与 dsh-native-collab-ui 行
+# 会让启动直接失败。处理顺序：
+#   1) 完全停止 DSH 进程；2) 备份上述覆盖文件与 Profile patch；
+#   3) 删除覆盖文件中所有指向本插件的行（不确定时先整份改名备份为 *.bak）；
+#   4) 检查 Profile 的 cordis.patch.yml / cordis.yml，移除同类残留行；
+#   5) 重启同一 Profile；仍失败时把本入口 dsh-native-collab-ui 行的 disabled 置为 true 再重启，先回原生服务。
+# 只删除失效条目，不要清空 patch，不要删除会话或用量记录。完整步骤见 docs/FAQ.md。
+# Only insert rows are component switches: one management entry owns the runtime.
+# Pure startup expressions inspect the complete sibling config (not live services).
+# Disabling this entry restores native roots after a full Profile restart.
+- id: subagent
+  name: '@deepseek-ai/dsh-subagent'
+  disabled: &collabOwnsRuntime !!js |
+    ctx[Symbol.for('cordis.entry')].parent.data.some(row => row.id === 'dsh-native-collab-ui' && row.name === '@sieuno/dsh-native-collab' && (row.disabled === undefined || row.disabled === false))
+- id: agent-team
+  name: '@deepseek-ai/dsh-experimental-agent-team'
+  disabled: *collabOwnsRuntime
+- id: tool-agent-team
+  name: '@deepseek-ai/dsh-experimental-tool-agent-team'
+  disabled: *collabOwnsRuntime
+# These are existing declarations, NOT new preset rows. Their configs are intact.
+# Both native and managed modes provide subagents, so this gate has no UI-service
+# dependency and cannot strand native presets when the management row is disabled.
+- id: preset-standard
+  name: '@deepseek-ai/dsh-agent-preset'
+  inject: [subagents]
+- id: preset-minimal
+  name: '@deepseek-ai/dsh-agent-preset'
+  inject: [subagents]
+- id: preset-ptc
+  name: '@deepseek-ai/dsh-agent-preset'
+  inject: [subagents]
+- id: preset-cordis
+  name: '@deepseek-ai/dsh-agent-preset'
+  inject: [subagents]
+# Old independently inserted derived rows must not start a second provider set.
+- id: dsh-native-collab-subagent
+  name: '@sieuno/dsh-native-collab/subagent'
+  disabled: true
+- id: dsh-native-collab-agent-team
+  name: '@sieuno/dsh-native-collab/agent-team'
+  disabled: true
+- id: dsh-native-collab-tool-agent-team
+  name: '@sieuno/dsh-native-collab/tool-agent-team'
+  disabled: true
+- id: dsh-native-collab-tool-subagent-control
+  name: '@sieuno/dsh-native-collab/tool-subagent-control'
+  disabled: true
+- id: dsh-native-collab-tool-subagent-list-agents
+  name: '@sieuno/dsh-native-collab/tool-subagent-control/list-agents'
+  disabled: true
+- id: dsh-native-collab-tool-subagent
+  name: '@sieuno/dsh-native-collab/tool-subagent'
+  disabled: true
+- id: dsh-native-collab-tool-subagent-fork
+  name: '@sieuno/dsh-native-collab/tool-subagent/fork'
+  disabled: true
 - insert:
     - id: "dsh-native-collab-ui"
       name: "@sieuno/dsh-native-collab"
       disabled: false
-    - id: "dsh-native-collab-subagent"
-      name: "@sieuno/dsh-native-collab/subagent"
-      disabled: true
-    - id: "dsh-native-collab-tool-subagent-control"
-      name: "@sieuno/dsh-native-collab/tool-subagent-control"
-      disabled: true
-    - id: "dsh-native-collab-tool-subagent-list-agents"
-      name: "@sieuno/dsh-native-collab/tool-subagent-control/list-agents"
-      disabled: true
-    - id: "dsh-native-collab-agent-team"
-      name: "@sieuno/dsh-native-collab/agent-team"
-      disabled: true
-    - id: "dsh-native-collab-tool-agent-team"
-      name: "@sieuno/dsh-native-collab/tool-agent-team"
-      disabled: true
-    - id: "dsh-native-collab-tool-subagent"
-      name: "@sieuno/dsh-native-collab/tool-subagent"
-      disabled: true
-    - id: "dsh-native-collab-tool-subagent-fork"
-      name: "@sieuno/dsh-native-collab/tool-subagent/fork"
-      disabled: true
+      config:
+        runtimeMode: managed

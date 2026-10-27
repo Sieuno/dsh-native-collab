@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "团队协作",
-    "description": "管理团队成员、成员消息和共享任务。启用此派生行会替换原生 agent-team，不会同时加载。"
+    "title": "Team 运行服务",
+    "description": "提供多 Agent 团队协作、消息路由及共享任务看板的后台服务。"
   }
 }

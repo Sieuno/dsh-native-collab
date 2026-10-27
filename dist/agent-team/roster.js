@@ -52,7 +52,6 @@ export class TeamRoster {
     lifecycle;
     maxMembers;
     selection;
-    budget;
     /**
      * @param ctx - Team service context with Agent, Session, persistence, and subagent services.
      * @param journal - authoritative Lead-log transaction owner.
@@ -60,13 +59,12 @@ export class TeamRoster {
      * @param maxMembers - maximum immutable roster entries per Team.
      * @param selection - route validation that must finish before a name claim.
      */
-    constructor(ctx, journal, lifecycle, maxMembers, selection, budget) {
+    constructor(ctx, journal, lifecycle, maxMembers, selection) {
         this.ctx = ctx;
         this.journal = journal;
         this.lifecycle = lifecycle;
         this.maxMembers = maxMembers;
         this.selection = selection;
-        this.budget = budget;
     }
     /**
      * Resolve one exact live Agent's Team role.
@@ -119,69 +117,6 @@ export class TeamRoster {
             // the non-throwing probe must not veto unrelated Agent lifecycle edges.
             return undefined;
         }
-    }
-    /** Resolve request admission identity strictly; projection failures must not turn Team children into bypasses. */
-    requestMembership(agent) {
-        if (this.ctx.agents.get(agent.id) !== agent)
-            return undefined;
-        const parentId = agent.session.header.parentSession;
-        if (parentId === undefined)
-            return { root: agent, id: TeamId(agent.id), role: 'lead', name: 'lead' };
-        const root = this.ctx.agents.get(parentId);
-        if (root === undefined)
-            return undefined;
-        const member = this.journal.state(root).members.find(candidate => candidate.id === agent.id);
-        if (member?.phase === 'active' || member?.phase === 'provisioning') {
-            return { root, id: TeamId(root.id), role: 'teammate', name: member.name };
-        }
-        if (this.subagentDescriptor(agent))
-            return undefined;
-        return { root: agent, id: TeamId(agent.id), role: 'lead', name: 'lead' };
-    }
-    /**
-     * Resolve only the persisted Team that owns this Agent's request budget.
-     * Ordinary provider-owned children inherit quota accounting without gaining a Team role;
-     * an independent host fork without its own subagent descriptor remains a boundary.
-     * @param agent - exact live Agent requesting model admission.
-     * @returns owning Team Lead, or undefined when no started Team owns this request.
-     * @throws TeamError when a provider-owned lineage is stale, cyclic, or incomplete.
-     */
-    resolveBudgetRoot(agent) {
-        if (this.ctx.agents.get(agent.id) !== agent) {
-            throw new TeamError('cannot resolve Team request budget for a stale Agent', 'TEAM_BUDGET_SCOPE_UNKNOWN');
-        }
-        const visited = new Set();
-        let current = agent;
-        while (true) {
-            if (visited.has(current.id)) {
-                throw new TeamError('cannot resolve Team request budget through a cyclic Agent lineage', 'TEAM_BUDGET_SCOPE_UNKNOWN');
-            }
-            visited.add(current.id);
-            const parentId = current.session.header.parentSession;
-            if (parentId === undefined)
-                return this.startedBudgetRoot(current);
-            const providerOwned = this.subagentDescriptor(current);
-            const parent = this.ctx.agents.get(parentId);
-            if (parent === undefined) {
-                if (providerOwned) {
-                    throw new TeamError(`cannot resolve Team request budget: provider-owned Agent parent "${parentId}" is not live`, 'TEAM_BUDGET_SCOPE_UNKNOWN');
-                }
-                return this.startedBudgetRoot(current);
-            }
-            const rosterMember = this.journal.state(parent).members.some(member => member.id === current.id && (member.phase === 'active' || member.phase === 'provisioning'));
-            if (!providerOwned && !rosterMember)
-                return this.startedBudgetRoot(current);
-            current = parent;
-        }
-    }
-    /** Return the Agent itself when its own durable state proves a started Team. */
-    startedBudgetRoot(agent) {
-        const state = this.journal.state(agent);
-        const started = this.budget.hasLedger(agent)
-            || state.members.length > 0
-            || state.tasks.length > 0
-            || state.messages.length > 0;
-        return started ? agent : undefined;
     }
     /**
      * Own request evidence wins. A live Agent with none may show its creation model.
@@ -300,7 +235,7 @@ export class TeamRoster {
         }
         const signal = AbortSignal.any([request.signal, this.lifecycle.signal]);
         signal.throwIfAborted();
-        await this.selection.resolveCallConfig(decision.call, signal);
+        await this.selection.resolveCallConfig(decision.call, signal, caller);
         signal.throwIfAborted();
         if (this.lifecycle.disposed)
             throw new TeamError('Agent Teams service is disposing', 'TEAM_DISPOSED');
@@ -337,23 +272,6 @@ export class TeamRoster {
         const previousStatus = availability(live);
         this.ctx.subagents.interrupt(target.id, { kind: 'ancestor', agent: caller });
         return { previousStatus };
-    }
-    /** Cancel all live Agents owned by this Team budget; claimed inbox items may not replay. */
-    stopForBudget(root, reason = 'Agent Team logical request budget exhausted') {
-        root.cancel({ kind: 'hook', reason }, { keepInbox: true });
-        for (const live of this.ctx.agents.list()) {
-            if (live.id === root.id)
-                continue;
-            try {
-                if (this.resolveBudgetRoot(live)?.id === root.id) {
-                    live.cancel({ kind: 'hook', reason }, { keepInbox: true });
-                }
-            }
-            catch {
-                // An unresolved descendant is denied at request admission, but must not
-                // make an unrelated/independent host fork part of this Team's cancellation.
-            }
-        }
     }
     /**
      * Group exact live roster children by their current Lead for runtime teardown.
@@ -404,7 +322,6 @@ export class TeamRoster {
             phase: 'provisioning',
         };
         await this.journal.transact(root.id, async () => {
-            await this.budget.ensureStarted(root);
             const state = this.journal.state(root);
             if (state.members.some(member => member.name === name)) {
                 throw new TeamError(`teammate name "${name}" was already used in this Team`, 'TEAM_MEMBER_NAME_TAKEN');

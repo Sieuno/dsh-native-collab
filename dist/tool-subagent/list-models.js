@@ -23,7 +23,7 @@ function modelLine(provider, model) {
     return `${provider}/${model.id} — ${model.name}${model.description === undefined ? '' : `: ${model.description}`}`;
 }
 /** Read the requested provider, advertised models, or exact-model efforts. */
-async function listSubagentModels(ctx, policy, request, signal) {
+export async function listSubagentModels(ctx, policy, request, signal) {
     const llm = ctx.get('llm');
     if (llm === undefined) {
         throw new Error('cannot discover child LLM routes because the `llm` service is unavailable');
@@ -72,9 +72,7 @@ export function registerListSubagentModels(ctx, policy) {
         name: 'list_subagent_models',
         description: 'Discover LLM routes for subagents without changing the current Agent. Call with no arguments to list '
             + 'registered providers, with `provider` to list its advertised models, or with `provider` and `model` '
-            + 'to inspect that exact model and its reasoning efforts. Catalog membership is advisory: an adapter may '
-            + 'accept an unlisted model id. Use the returned ids with a delegation tool\'s `provider`, `model`, and '
-            + '`reasoning_effort` fields.',
+            + 'to inspect that model and its reasoning efforts. Use the returned ids in `provider`, `model`, and `reasoning_effort`.',
         parameters: {
             provider: {
                 type: 'string',
@@ -82,7 +80,7 @@ export function registerListSubagentModels(ctx, policy) {
             },
             model: {
                 type: 'string',
-                description: 'Exact model id to inspect. Requires provider; omit to list that provider\'s advertised models.',
+                description: 'Exact model id to inspect. Requires provider; omit to list models.',
             },
         },
         output: {

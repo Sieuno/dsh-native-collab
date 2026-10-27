@@ -8,8 +8,8 @@ export function resolveChildMessagePolicy(snapshot) {
 /** A deny is checked at admission, not inferred from tool visibility. */
 export function childMessageDenied(policy, running) {
     if (running && !policy.running)
-        return 'Parent guidance to a running child is disabled by the next-assembly communication setting';
+        return 'Parent guidance to a running child is disabled by the communication enhancement setting';
     if (!running && !policy.continuation)
-        return 'Parent continuation of an idle or completed child is disabled by the next-assembly communication setting';
+        return 'Parent continuation of an idle or completed child is disabled by the communication enhancement setting';
     return undefined;
 }

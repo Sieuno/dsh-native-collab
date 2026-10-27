@@ -1,56 +1,50 @@
 # DSH Native Collab
 
-**Flexible Agent Teams and model selection for DSH, with enhanced communication between parent and child conversations.**
+**DeepSeek Harness agent collaboration enhancements (based on the original plugin)**: child Agent communication enhancements and Team model selection for DeepSeek Harness (DSH). An unofficial community plugin derived from DeepSeek Harness. [中文](README.md).
 
-[中文](README.md)
+**Status**: Local trial build (not published to npm). Declared compatibility: DSH `>=0.2.1-rc.1 <0.2.2-0`, Node `>=22.19.0`.
 
-An unofficial community plugin derived from DeepSeek Harness native collaboration modules. It is not an official DeepSeek release.
+[Installation Guide](docs/INSTALL.en.md) · [FAQ](docs/FAQ.en.md) · [Test Tiers](TESTING.md) · [Upstream](UPSTREAM.md)
 
-## Startup overrides and switching back
+---
 
-**This plugin uses startup configuration overrides to switch selected official collaboration components and tools within Agent presets to this project's enhanced implementations.** It does not modify the official DSH installation files. Installation alone does not switch components: review and confirm the plugin's own master switch, then fully restart.
+## Main Features
 
-**To return to the official native collaboration components, turn off this plugin's own master switch, confirm the save, and fully restart.** Disabling an individual row in DSH's plugin manager or directly removing the package is not this restore procedure.
+| Feature | Description |
+|---|---|
+| Child Agent communication | A main enhancement switch plus "accept additional instructions while working" and "allow continuing completed conversations"; disabling it retains native capabilities and permissions. |
+| Model selection for Team and subagents | Three model sources: the model list captured at conversation start, the list in current DSH settings, and all models currently available; the latter two are re-read on every query or agent creation under provider adapters and permission checks. |
+| Consecutive automatic wake-up limit | 32 rounds by default, shared across the Team family to stop multi-agent loops; only uninterrupted automatic wake-ups without human input are counted, human input or a process restart resets it, and completion/stop reports to the direct parent or Team Lead are exempt. |
+| One entry hosting three backend services | Subagent service, Team service, and Team tools are hosted by a single management entry that is mutually exclusive with native root services; disabling the entry and restarting the Profile restores native. |
+| Four collaboration tools adapted in memory | control/list/spawn/fork are adapted for the four known AgentPresets by module identity and ID without modifying or pinning user preset files and without touching unknown custom providers; root tools from the experimental package stay disabled. |
+| Read-only diagnostics | Shows each component's current state and runtime phase, model source, and assembly diagnosis (native / managed / mixed / unknown) read-only; nothing writes to the Profile online. |
+| Autosave and bilingual UI | Settings save automatically and report failures next to the affected field; the UI follows the DSH language between Chinese and English. |
+| Native restore and troubleshooting | Removing the plugin removes the patch and restores native root services; if DSH fails to start after uninstall or downgrade, follow the FAQ to check external startup overlays and stale patch rows. |
 
-This returns to a fixed native baseline, not the complete pre-install configuration. Five native root components are enabled, including any previously disabled ones; copied presets and existing Team usage records remain. See the uninstall notes below.
+View progress and results in the originating conversation's Team panel or task card; the settings page is not a live monitoring dashboard.
 
-## What it adds
+## Architecture & Integration
 
-- More flexible Team collaboration and model selection, within the host's allowed model roster.
-- Enhanced parent–child communication: guidance while a child is running and continuation after completion, subject to existing ownership, permission and session rules.
-- A review-and-confirm switch for selecting derived collaboration components at the next startup.
-- A persistent per-Team request limit as a supporting feature. The default is 32 requests; this is not a token or monetary budget.
+The patch inserts only one management entry that manages three backend services. Native root services are mutually exclusive with the management entry: when enabled, managed services run; when disabled, native root services are restored upon restart.
+Four tools are adapted in memory for the four known AgentPreset IDs and module identities without pinning or rewriting preset files, and unknown custom providers remain untouched. Root tools from experimental packages remain disabled.
 
-**No parallel toolset.** The plugin provides compatible replacements for the original collaboration tools, preserving their existing collaboration capabilities while adding enhancements. It also updates model-facing tool descriptions and usage instructions, aiming to minimize extra context overhead from duplicate tool definitions and instructions.
+## Installation & Setup
 
-## Compatibility
-
-Expected compatibility: `>=0.2.1-rc.1 <0.2.2-0` (DSH 0.2.1 series, starting at rc.1). The tested environment is recorded separately; a Profile name is not a compatibility restriction.
-
-Node >=22.19.0 is required.
-
-## Install
-
-Read the [installation guide (Chinese)](docs/INSTALL.md) first: back up your Profile, ensure the matching official experimental Agent Team profile is present, and disable HMR before using this plugin's master switch.
-
-```sh
-dsh plugin --profile web add @sieuno/dsh-native-collab
-```
-
-Replace `web` with your Profile name. Installation only registers the management entry. Review and confirm the plugin's own master switch, stop the relevant Host/Agents, and fully restart the same Profile. Refreshing a browser tab is not a Host restart. Two ordinary-tool placeholder rows intentionally stay disabled; those tools operate inside presets.
-
-## Before switching off or uninstalling
-
-- Switch-off is a fixed native baseline, **not a restoration of the pre-install state**: five native root components become enabled, including ones previously disabled.
-- Complete copied presets remain in the Profile and can pin future upstream defaults. Existing Team ledgers retain their limit and usage; changing the limit affects new Teams.
-- Switch off and confirm success first, then stop the Host/Agents, then remove the bundle and restart. Official Remove does not perform the switch-off for you.
+1. Stop the target Profile (e.g. `web`).
+2. Run installation from workspace root (or use absolute path to TGZ):
 
 ```sh
-dsh plugin --profile web remove @sieuno/dsh-native-collab
+dsh plugin --profile web add "./release/artifacts/current/sieuno-dsh-native-collab-<version>.tgz"
 ```
 
-Known cosmetic issue: long change labels may require horizontal scrolling at narrow widths or high zoom. Confirmation and cancellation controls remain reachable.
+3. Restart the Profile and open the plugin management page:
+- **Automatic Saving**: All changes save automatically without manual save buttons; errors appear beside the affected item.
+- **Activation**: Model source changes apply immediately to subsequent queries and creation; feature toggles and wake-up limits take effect after restarting the Profile as prompted (refreshing browser page does not count as restart).
+- **Uninstallation**: Removing the plugin removes the patch and restores native services. If manual entries were previously pinned, see the recovery guide in the [FAQ](docs/FAQ.en.md).
+- **Startup Recovery**: If DSH fails to start after uninstalling or downgrading the plugin, check whether a `*.patch.json` external startup overlay under the Profile directory still references this plugin, then clean stale rows from the Profile patch; see the [FAQ](docs/FAQ.en.md).
 
-## Development and license
+## Development & License
 
-See the [contributing guide](https://github.com/Sieuno/dsh-native-collab/blob/main/CONTRIBUTING.md) and [upstream attribution](UPSTREAM.md). MIT licensed; upstream DeepSeek copyright and package NOTICE files are retained. The npm package is `@sieuno/dsh-native-collab`. The GitHub Release TGZ contains the same package and is also accepted by DSH on Windows; no separate installation ZIP is required.
+[Contributing](CONTRIBUTING.md) · [Testing](TESTING.md) · [Changelog](CHANGELOG.md).
+
+Derived from [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) `dsh-v0.2.1-rc.2`, licensed under [MIT](LICENSE). See [Upstream](UPSTREAM.md) and [Third-party notices](THIRD_PARTY_NOTICES.md).

@@ -36,7 +36,7 @@ import { SubagentError } from './error.ts'
 import { isAdjacentAgentSendMessageTool } from './internal.ts'
 import type { ActivationObserver } from './lifecycle.ts'
 import type {
-  ContinuableCreateRequest, ContinuableCreateSpec, SubagentInterruptAuthority,
+  ChildActivitySnapshot, ContinuableCreateRequest, ContinuableCreateSpec, SubagentInterruptAuthority,
   SubagentActivationSpec, SubagentActivation, SubagentStartRequest, SubagentRun,
   SubagentSendMessageOptions, SubagentResult, ResolvedSubagentStartRequest,
 } from './types.ts'
@@ -55,6 +55,8 @@ type ChildDeliveryOptions = {
   readonly delivery: SubagentDelivery
   readonly source?: MessageSource
   readonly signal: AbortSignal
+  /** Model-originated message; host prompt delivery is deliberately unmarked. */
+  readonly automatic?: boolean
 }
 
 /** Package-private hooks supplied by the owning service. */
@@ -64,6 +66,8 @@ interface SubagentHost {
   prepareContinuable(name: string, request: ContinuableCreateRequest): Promise<ContinuableCreateSpec>
   /** Build the lifecycle observer for one Activation residency epoch. */
   observeActivation(provider: string, childId: SessionId, parent: Agent): ActivationObserver
+  /** Reserve one automatic-interaction turn; omitted hosts retain legacy behavior. */
+  reserveAutomatic?(sender: Agent, targetId: SessionId): { commit(): void; refund(): void }
 }
 
 /** Inputs shared by fresh and resumed Activation materialization. */
@@ -109,9 +113,16 @@ type MaterializeInputs = MaterializeBase & (
  * keep waiting even if an intermediate Agent leaves the registry meanwhile.
  */
 interface Materialization {
+  readonly childId: SessionId
   readonly lineage: readonly Agent[]
   readonly settled: Promise<void>
   readonly controller: AbortController
+}
+
+/** One caller-owned, process-local activity subscription. */
+interface ChildActivityWatcher {
+  readonly excludedIds: ReadonlySet<SessionId>
+  readonly onChange: () => void
 }
 
 /** Residency state observed by the natural-settlement watcher. */
@@ -135,6 +146,10 @@ export class SubagentManager {
   private readonly rootPools = new WeakMap<Agent, ActivationPool>()
   /** Materializations admitted before drain, tracked through publication or rollback. */
   private readonly materializations = new Set<Materialization>()
+  /** Recorded manager lineage survives an intermediate Agent leaving the registry. */
+  private readonly activityLineages = new WeakMap<Activation, readonly Agent[]>()
+  /** Exact caller identity → subscriptions; callers own their cleanup. */
+  private readonly childActivityWatchers = new Map<Agent, Set<ChildActivityWatcher>>()
   /** Per-child serializer shared by delivery, release, and disposal. */
   private readonly locks = new ChildLock()
   /** Structural Cordis owner of every Activation handle. */
@@ -153,12 +168,14 @@ export class SubagentManager {
    * @param ctx - context providing Agents, Sessions, and teardown ownership.
    * @param host - provider dispatch and lifecycle observation owned by the service.
    * @param maxActiveSubagents - the current configured child capacity.
+   * @param childMessages - a policy or a live resolver; a resolver keeps the
+   *   volatile parent-message sub-options effective without a restart.
    */
   constructor(
     private readonly ctx: Context,
     private readonly host: SubagentHost,
     private readonly maxActiveSubagents: () => number,
-    private readonly childMessages: ChildMessagePolicy = { running: true, continuation: true },
+    private readonly childMessages: ChildMessagePolicy | (() => ChildMessagePolicy) = { running: true, continuation: true },
   ) {
     // Ordinary Cordis owner effects unwind in reverse registration order, which
     // cannot express the dynamic child graph. Register the private scope's
@@ -170,6 +187,7 @@ export class SubagentManager {
     this.ownerCtx = scope.ctx
     ctx.on('agent/disposed', ({ agent }) => {
       this.closingScopes.delete(agent)
+      this.childActivityWatchers.delete(agent)
     })
     ctx.effect(function* (this: SubagentManager) {
       yield scope.dispose
@@ -291,6 +309,108 @@ export class SubagentManager {
     }
   }
 
+  /** Read only the manager's admitted preparations and resident descendant epochs. */
+  childActivity(parent: Agent, excludedIds: ReadonlySet<SessionId>): ChildActivitySnapshot {
+    this.assertActivityCaller(parent)
+    const runningIds: SessionId[] = []
+    for (const activation of this.resident.values()) {
+      if (activationAgent(activation) === parent || !activation.ancestry.has(parent)) continue
+      const lineage = this.activityLineages.get(activation) ?? [activation.parent]
+      if (this.activityExcluded(activation.childId, lineage, parent, excludedIds)) continue
+      if (activation.kind === 'external' || activation.closing !== undefined) {
+        runningIds.push(activation.childId)
+        continue
+      }
+      const child = activation.handle.agent
+      if (child.status !== 'idle' || (activation.failureAt === undefined
+        && (child.inbox.nextTurn.length > 0 || child.inbox.nextStep.length > 0))) {
+        runningIds.push(activation.childId)
+      }
+    }
+    const preparing = [...this.materializations].some(item => item.lineage.includes(parent)
+      && !this.activityExcluded(item.childId, item.lineage, parent, excludedIds))
+    return { runningIds, preparing }
+  }
+
+  /** Register without a fabricated first edge; callers subscribe before taking a snapshot. */
+  observeChildActivity(parent: Agent, excludedIds: ReadonlySet<SessionId>, onChange: () => void): () => void {
+    this.assertActivityCaller(parent)
+    let watchers = this.childActivityWatchers.get(parent)
+    if (watchers === undefined) {
+      watchers = new Set()
+      this.childActivityWatchers.set(parent, watchers)
+    }
+    const watcher: ChildActivityWatcher = { excludedIds: new Set(excludedIds), onChange }
+    watchers.add(watcher)
+    return () => {
+      watchers.delete(watcher)
+      if (watchers.size === 0 && this.childActivityWatchers.get(parent) === watchers) {
+        this.childActivityWatchers.delete(parent)
+      }
+    }
+  }
+
+  /** Activity authority is an exact live object, never just a session id. */
+  private assertActivityCaller(parent: Agent): void {
+    if (this.ctx.agents.get(parent.id) !== parent) {
+      throw new SubagentError('child activity requires the exact live parent agent', 'UNAUTHORIZED')
+    }
+  }
+
+  /** Exclude branches below this caller, never the caller's own Team ancestors. */
+  private activityExcluded(
+    childId: SessionId,
+    lineage: readonly Agent[],
+    parent: Agent,
+    excludedIds: ReadonlySet<SessionId>,
+  ): boolean {
+    if (excludedIds.has(childId)) return true
+    for (const ancestor of lineage) {
+      if (ancestor === parent) break
+      if (excludedIds.has(ancestor.id)) return true
+    }
+    return false
+  }
+
+  /** Deliver relevant edges synchronously, isolating consumer errors and reentrant cleanup. */
+  private notifyChildActivity(childId: SessionId, lineage: readonly Agent[]): void {
+    for (const parent of lineage) {
+      const watchers = this.childActivityWatchers.get(parent)
+      if (watchers === undefined || this.ctx.agents.get(parent.id) !== parent) continue
+      for (const watcher of [...watchers]) {
+        if (!watchers.has(watcher) || this.activityExcluded(childId, lineage, parent, watcher.excludedIds)) continue
+        try { watcher.onChange() } catch (_error: unknown) { /* Observers cannot affect manager transactions. */ }
+      }
+    }
+  }
+
+  /** Managed ancestry comes from resident identities, not caller-controlled session headers. */
+  private childActivityLineage(parent: Agent): readonly Agent[] {
+    const activation = this.resident.get(parent.id)
+    if (activation === undefined || activationAgent(activation) !== parent) return [parent]
+    return [parent, ...(this.activityLineages.get(activation) ?? [activation.parent])]
+  }
+
+  /** Track preflight as well as materialization so slow preparation cannot look quiescent. */
+  private beginChildPreparation(parent: Agent, childId: SessionId, signal: AbortSignal): {
+    readonly signal: AbortSignal
+    readonly finish: () => void
+  } {
+    const controller = new AbortController()
+    const settled = Promise.withResolvers<void>()
+    const item: Materialization = { childId, lineage: this.childActivityLineage(parent), controller, settled: settled.promise }
+    this.materializations.add(item)
+    this.notifyChildActivity(childId, item.lineage)
+    return {
+      signal: AbortSignal.any([signal, controller.signal]),
+      finish: () => {
+        if (!this.materializations.delete(item)) return
+        settled.resolve()
+        this.notifyChildActivity(childId, item.lineage)
+      },
+    }
+  }
+
   /**
    * Stop the managed descendants of exact live host-owned parents.
    * @param parents - exact live roots whose managed descendants must stop.
@@ -409,7 +529,12 @@ export class SubagentManager {
     // still creating its child. A turn-scoped delegation does not need this,
     // but the service is also callable outside a turn.
     const releaseHold = this.holdOwnership(parent, childId)
+    const preparation = this.beginChildPreparation(parent, childId, spec.signal)
+    spec = { ...spec, signal: preparation.signal }
+    let reservation: ReturnType<NonNullable<SubagentHost['reserveAutomatic']>> | undefined
+    let committed = false
     try {
+      reservation = this.host.reserveAutomatic?.(parent, childId)
       const cwd = await this.resolveDirectory(request, spec.signal)
       const prepared = await this.host.prepareContinuable(spec.provider, {
         sessionId: childId,
@@ -458,22 +583,28 @@ export class SubagentManager {
         established = activation
         const child = requireLocalActivation(activation).handle.agent
         const childHeader = child.session.header
-        return await this.submitMaterialized(
+        const messageId = await this.submitMaterialized(
           activation,
           spec.delivery !== 'caller' && isAdjacentAgentSendMessageTool(this.ctx.get('tools')?.get('send_message', child))
             ? withContinuableReturnGuidance(parent.id, request.prompt)
             : request.prompt,
-          { source: { kind: 'user' }, signal: spec.signal, delivery: 'queue' },
+          { source: createAgentMessage(parent, []).source, signal: spec.signal, delivery: 'queue' },
           parent,
           () => {
             establishCatalogChild(parent.session, childHeader, descriptor)
           },
         )
+        reservation?.commit()
+        committed = true
+        return messageId
       })
       return { ...this.receipt(established), childId, messageId }
     } catch (error: unknown) {
+      if (!committed) reservation?.refund()
       releaseHold()
       throw error
+    } finally {
+      preparation.finish()
     }
   }
 
@@ -487,6 +618,8 @@ export class SubagentManager {
     this.assertAdmitting(parent)
     const pendingId = brandString<SessionId>(randomUUID())
     const releaseHold = this.holdOwnership(parent, pendingId)
+    const preparation = this.beginChildPreparation(parent, pendingId, spec.signal)
+    spec = { ...spec, signal: preparation.signal }
     let activation: Activation | undefined
     try {
       const cwd = await this.resolveDirectory(spec.request, spec.signal)
@@ -520,6 +653,7 @@ export class SubagentManager {
       throw error
     } finally {
       releaseHold()
+      preparation.finish()
     }
   }
 
@@ -562,7 +696,10 @@ export class SubagentManager {
       && senderActivation.handle.agent === sender
       && senderActivation.parent.id === targetId) {
       options.signal.throwIfAborted()
-      return this.sendToParent(senderActivation, sender, content, delivery)
+      return this.sendToParent(senderActivation, sender, content, delivery, options.result === true)
+    }
+    if (options.result === true) {
+      throw new SubagentError('task result may only be sent to the exact live direct parent', 'UNAUTHORIZED')
     }
     if (sender.session.header.parentSession === targetId) {
       throw new SubagentError(
@@ -573,6 +710,7 @@ export class SubagentManager {
     return this.deliverToChild(sender, targetId, content, {
       signal: options.signal,
       delivery,
+      automatic: true,
     })
   }
 
@@ -742,17 +880,19 @@ export class SubagentManager {
   private materialize(inputs: MaterializeInputs): Promise<Activation> {
     this.assertAdmitting(inputs.parent)
     inputs.signal.throwIfAborted()
-    const lineage = this.liveLineage(inputs.parent)
+    const lineage = this.childActivityLineage(inputs.parent)
     const pool = this.resident.get(inputs.parent.id)?.pool ?? this.rootPool(inputs.parent)
     const releaseSlot = pool.reserve(this.maxActiveSubagents())
     const settled = Promise.withResolvers<void>()
     const controller = new AbortController()
     const materialization: Materialization = {
+      childId: inputs.childId,
       lineage,
       settled: settled.promise,
       controller,
     }
     this.materializations.add(materialization)
+    this.notifyChildActivity(materialization.childId, lineage)
     return this.materializeTracked(
       { ...inputs, signal: AbortSignal.any([inputs.signal, controller.signal]) }, lineage, pool, releaseSlot,
     ).catch((error: unknown) => {
@@ -762,6 +902,7 @@ export class SubagentManager {
     }).finally(() => {
       this.materializations.delete(materialization)
       settled.resolve()
+      this.notifyChildActivity(materialization.childId, lineage)
     })
   }
 
@@ -943,7 +1084,9 @@ export class SubagentManager {
       announced: false,
     }
     void activation.result.promise.catch(() => undefined)
+    this.activityLineages.set(activation, parentLineage)
     this.resident.set(childId, activation)
+    this.notifyChildActivity(childId, parentLineage)
     try {
       this.assertAdmitting(parent)
       inputs.signal.throwIfAborted()
@@ -952,6 +1095,12 @@ export class SubagentManager {
       const wakeSettlement = (): void => { this.wake(activation) }
       if (activation.kind === 'local') {
         observeLocalFailure(activation, wakeSettlement)
+        const child = activation.handle.agent
+        child.ctx.on('agent/status', ({ agent }) => { if (agent === child) wakeSettlement() })
+        // A committed turn/end can clear failureAt and make a parked inbox pending again.
+        child.ctx.on('session/event', (session, event) => {
+          if (session === child.session && event.type === 'turn/end') wakeSettlement()
+        })
         activation.handle.agent.ctx.on('agent/inbox/inserted', wakeSettlement)
         activation.handle.agent.ctx.on('agent/inbox/claimed', wakeSettlement)
         activation.handle.agent.ctx.on('agent/inbox/discarded', wakeSettlement)
@@ -988,6 +1137,7 @@ export class SubagentManager {
         await (activation.kind === 'local' ? activation.handle.dispose() : activation.run.dispose())
       } finally {
         this.resident.delete(activation.childId)
+        this.notifyChildActivity(activation.childId, this.activityLineages.get(activation) ?? [activation.parent])
         activation.releaseSlot()
         this.releaseOwnership(activation.childId)
         activation.result.reject(error)
@@ -1018,6 +1168,7 @@ export class SubagentManager {
 
   /** Let a settlement watcher re-check residency after relevant state changes. */
   private wake(activation: Activation): void {
+    this.notifyChildActivity(activation.childId, this.activityLineages.get(activation) ?? [activation.parent])
     if (activation.kind === 'external') return
     activation.poke.resolve()
     activation.poke = Promise.withResolvers<void>()
@@ -1176,6 +1327,7 @@ export class SubagentManager {
       )
     }
     this.resident.delete(childId)
+    this.notifyChildActivity(childId, this.activityLineages.get(activation) ?? [activation.parent])
     activation.releaseSlot()
     const terminal: SubagentResult = failure === undefined ? result : { output: [], stopReason: 'error' }
     this.notifySettlement(activation, result)
@@ -1192,6 +1344,8 @@ export class SubagentManager {
     try {
       const parent = this.ctx.agents.get(activation.parent.id)
       if (parent !== activation.parent) return
+      // Settlement notices (completion, stop, and error) are lifecycle reports,
+      // not automatic model interactions: keep them outside the guard and inbox accounting.
       const message = createSettlementMessage(
         activation.childId, terminal, activationAgent(activation) !== undefined,
       )
@@ -1237,12 +1391,16 @@ export class SubagentManager {
     options: ChildDeliveryOptions,
   ): Promise<MessageId> {
     this.assertAdmitting(parent)
+    this.assertActivityCaller(parent)
     const releaseHold = this.holdOwnership(parent, childId)
+    const preparation = this.beginChildPreparation(parent, childId, options.signal)
     try {
-      return await this.deliverFollowup(parent, childId, content, options)
+      return await this.deliverFollowup(parent, childId, content, { ...options, signal: preparation.signal })
     } catch (error: unknown) {
       releaseHold()
       throw error
+    } finally {
+      preparation.finish()
     }
   }
 
@@ -1289,6 +1447,7 @@ export class SubagentManager {
     sender: Agent,
     content: ContentBlock[],
     delivery: SubagentDelivery,
+    result: boolean,
   ): MessageId {
     /* v8 ignore next 6 -- only synchronous re-entrant teardown can open this
      * transaction between exact-agent authorization and this no-await span. */
@@ -1305,9 +1464,16 @@ export class SubagentManager {
         'PARENT_UNAVAILABLE',
       )
     }
-    const message = createAgentMessage(sender, content)
-    this.sendAgentMessage(parent, message, delivery)
-    return message.id
+    const reservation = result ? undefined : this.host.reserveAutomatic?.(sender, parent.id)
+    try {
+      const message = createAgentMessage(sender, content)
+      this.sendAgentMessage(parent, message, delivery)
+      reservation?.commit()
+      return message.id
+    } catch (error: unknown) {
+      reservation?.refund()
+      throw error
+    }
   }
 
   /** Send one Agent message while translating only the target's own rejection. */
@@ -1435,19 +1601,32 @@ export class SubagentManager {
     this.authorizeLineage(parent, activation.childId, activation.parent.id)
     this.assertChildMessagePolicy(parent, options, requireLocalActivation(activation).handle.agent.status !== 'idle')
     this.acquireOwnership(parent, activation.childId)
+    const reservation = options.automatic === true
+      ? this.host.reserveAutomatic?.(parent, activation.childId)
+      : undefined
     try {
       this.deliver(activation, message, options.delivery)
+      reservation?.commit()
+    } catch (error: unknown) {
+      reservation?.refund()
+      throw error
     } finally {
       this.wake(activation)
     }
     return message.id
   }
 
+  /** Resolve the current parent-message policy; a resolver keeps volatile settings live. */
+  private resolveChildMessages(): ChildMessagePolicy {
+    const policy = this.childMessages
+    return typeof policy === 'function' ? policy() : policy
+  }
+
   /** Preserve human input, peer relay, and native master-off messaging semantics. */
   private assertChildMessagePolicy(parent: Agent, options: ChildDeliveryOptions, running: boolean): void {
     const source = options.source
     if (source !== undefined && (source.kind !== 'agent-message' || source.senderSessionId !== parent.id)) return
-    const denied = childMessageDenied(this.childMessages, running)
+    const denied = childMessageDenied(this.resolveChildMessages(), running)
     if (denied !== undefined) throw new SubagentError(denied, 'INPUT_CLOSED')
   }
 

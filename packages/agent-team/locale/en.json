@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Team Collaboration",
-    "description": "Manage team members, member messages, and shared tasks. Enabling this derived row replaces native agent-team; both are not loaded."
+    "title": "Team runtime",
+    "description": "Backend service for Agent Team collaboration, message routing, and shared tasks."
   }
 }

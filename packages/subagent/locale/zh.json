@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "子智能体服务",
-    "description": "管理子智能体后端，为任务委派提供统一接口。启用此派生行会替换原生 subagent，不会同时加载。"
+    "title": "子 Agent 运行服务",
+    "description": "提供子 Agent 启动、生命周期管理与上下文传递的后台服务。"
   }
 }

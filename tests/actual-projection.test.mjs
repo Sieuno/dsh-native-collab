@@ -27,9 +27,8 @@ test('real compiled Team projection contains only standard Team Session state', 
   assert.equal(teamProjectionDefinition.stateSchema.parse(child).members.length, 1)
 })
 
-test('RC3 budget is not appended or projected as a bare Team Session event', async () => {
+test('Team state and journal never persist a request-budget event', async () => {
   for (const relative of [
-    'packages/agent-team/src/budget.ts',
     'packages/agent-team/src/journal.ts',
     'packages/agent-team/src/projection.ts',
     'packages/agent-team/src/types.ts',

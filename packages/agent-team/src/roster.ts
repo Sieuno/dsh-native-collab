@@ -11,7 +11,6 @@ import { foldSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { errorMessage, TeamError } from './error.ts'
 import { callerRoute, decideTeamSelection } from './selection.ts'
 import type { PinnedChildCall } from './selection.ts'
-import type { TeamBudget } from './budget.ts'
 import type { TeamJournal } from './journal.ts'
 import type { TeamRuntimeLifecycle } from './lifecycle.ts'
 import { readPersistedSession } from './persisted.ts'
@@ -26,6 +25,10 @@ import type {
   TeamMemberView,
 } from './types.ts'
 import { requiredText } from './validation.ts'
+
+type PreparedSpawnRequest = Omit<SpawnTeammateRequest, 'agentOptions'> & {
+  readonly agentOptions?: PinnedChildCall
+}
 
 const MEMBER_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u
 
@@ -64,6 +67,7 @@ export interface TeamSelectionPort {
   resolveCallConfig(
     config: { readonly provider: string; readonly model: string; readonly reasoningEffort?: string },
     signal: AbortSignal,
+    caller: Agent,
   ): Promise<unknown>
 }
 
@@ -100,7 +104,6 @@ export class TeamRoster {
     private readonly lifecycle: TeamRuntimeLifecycle,
     private readonly maxMembers: number,
     private readonly selection: TeamSelectionPort,
-    private readonly budget: TeamBudget,
   ) {}
 
   /**
@@ -151,68 +154,6 @@ export class TeamRoster {
       // the non-throwing probe must not veto unrelated Agent lifecycle edges.
       return undefined
     }
-  }
-
-  /** Resolve request admission identity strictly; projection failures must not turn Team children into bypasses. */
-  requestMembership(agent: Agent): TeamMembership | undefined {
-    if (this.ctx.agents.get(agent.id) !== agent) return undefined
-    const parentId = agent.session.header.parentSession
-    if (parentId === undefined) return { root: agent, id: TeamId(agent.id), role: 'lead', name: 'lead' }
-    const root = this.ctx.agents.get(parentId)
-    if (root === undefined) return undefined
-    const member = this.journal.state(root).members.find(candidate => candidate.id === agent.id)
-    if (member?.phase === 'active' || member?.phase === 'provisioning') {
-      return { root, id: TeamId(root.id), role: 'teammate', name: member.name }
-    }
-    if (this.subagentDescriptor(agent)) return undefined
-    return { root: agent, id: TeamId(agent.id), role: 'lead', name: 'lead' }
-  }
-
-  /**
-   * Resolve only the persisted Team that owns this Agent's request budget.
-   * Ordinary provider-owned children inherit quota accounting without gaining a Team role;
-   * an independent host fork without its own subagent descriptor remains a boundary.
-   * @param agent - exact live Agent requesting model admission.
-   * @returns owning Team Lead, or undefined when no started Team owns this request.
-   * @throws TeamError when a provider-owned lineage is stale, cyclic, or incomplete.
-   */
-  resolveBudgetRoot(agent: Agent): Agent | undefined {
-    if (this.ctx.agents.get(agent.id) !== agent) {
-      throw new TeamError('cannot resolve Team request budget for a stale Agent', 'TEAM_BUDGET_SCOPE_UNKNOWN')
-    }
-    const visited = new Set<string>()
-    let current = agent
-    while (true) {
-      if (visited.has(current.id)) {
-        throw new TeamError('cannot resolve Team request budget through a cyclic Agent lineage', 'TEAM_BUDGET_SCOPE_UNKNOWN')
-      }
-      visited.add(current.id)
-      const parentId = current.session.header.parentSession
-      if (parentId === undefined) return this.startedBudgetRoot(current)
-
-      const providerOwned = this.subagentDescriptor(current)
-      const parent = this.ctx.agents.get(parentId)
-      if (parent === undefined) {
-        if (providerOwned) {
-          throw new TeamError(`cannot resolve Team request budget: provider-owned Agent parent "${parentId}" is not live`, 'TEAM_BUDGET_SCOPE_UNKNOWN')
-        }
-        return this.startedBudgetRoot(current)
-      }
-      const rosterMember = this.journal.state(parent).members.some(member =>
-        member.id === current.id && (member.phase === 'active' || member.phase === 'provisioning'))
-      if (!providerOwned && !rosterMember) return this.startedBudgetRoot(current)
-      current = parent
-    }
-  }
-
-  /** Return the Agent itself when its own durable state proves a started Team. */
-  private startedBudgetRoot(agent: Agent): Agent | undefined {
-    const state = this.journal.state(agent)
-    const started = this.budget.hasLedger(agent)
-      || state.members.length > 0
-      || state.tasks.length > 0
-      || state.messages.length > 0
-    return started ? agent : undefined
   }
 
   /**
@@ -312,7 +253,7 @@ export class TeamRoster {
    * Validate a named child route before membership or name claim.
    * Omission leaves agentOptions unset so the child uses native inheritance.
    */
-  private async prepareSelection(caller: Agent, request: SpawnTeammateRequest): Promise<SpawnTeammateRequest> {
+  private async prepareSelection(caller: Agent, request: SpawnTeammateRequest): Promise<PreparedSpawnRequest> {
     const header = caller.session.requestHeader()?.config
     const decision = decideTeamSelection(request.agentOptions, callerRoute({
       options: caller.options,
@@ -329,7 +270,7 @@ export class TeamRoster {
     }
     const signal = AbortSignal.any([request.signal, this.lifecycle.signal])
     signal.throwIfAborted()
-    await this.selection.resolveCallConfig(decision.call, signal)
+    await this.selection.resolveCallConfig(decision.call, signal, caller)
     signal.throwIfAborted()
     if (this.lifecycle.disposed) throw new TeamError('Agent Teams service is disposing', 'TEAM_DISPOSED')
     return { ...request, agentOptions: decision.pass }
@@ -365,22 +306,6 @@ export class TeamRoster {
     return { previousStatus }
   }
 
-  /** Cancel all live Agents owned by this Team budget; claimed inbox items may not replay. */
-  stopForBudget(root: Agent, reason = 'Agent Team logical request budget exhausted'): void {
-    root.cancel({ kind: 'hook', reason }, { keepInbox: true })
-    for (const live of this.ctx.agents.list()) {
-      if (live.id === root.id) continue
-      try {
-        if (this.resolveBudgetRoot(live)?.id === root.id) {
-          live.cancel({ kind: 'hook', reason }, { keepInbox: true })
-        }
-      } catch {
-        // An unresolved descendant is denied at request admission, but must not
-        // make an unrelated/independent host fork part of this Team's cancellation.
-      }
-    }
-  }
-
   /**
    * Group exact live roster children by their current Lead for runtime teardown.
    * @returns each live Lead and the roster child ids currently in the Agent registry.
@@ -412,7 +337,7 @@ export class TeamRoster {
   /** Perform one creation admitted before the Team runtime disposal cutoff. */
   private async spawnAdmitted(
     caller: Agent,
-    request: SpawnTeammateRequest,
+    request: PreparedSpawnRequest,
   ): Promise<SpawnTeammateResult> {
     const membership = this.membership(caller)
     if (membership.role !== 'lead') {
@@ -434,7 +359,6 @@ export class TeamRoster {
     }
 
     await this.journal.transact(root.id, async () => {
-      await this.budget.ensureStarted(root)
       const state = this.journal.state(root)
       if (state.members.some(member => member.name === name)) {
         throw new TeamError(`teammate name "${name}" was already used in this Team`, 'TEAM_MEMBER_NAME_TAKEN')

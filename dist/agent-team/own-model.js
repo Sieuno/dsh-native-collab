@@ -1,13 +1,9 @@
-/**
- * Host-only display of one Session's own recorded model.
- * The inherited cut is an argument, never inferred from firstLiveSeq.
- */
 export const OWN_MODEL_KEY = 'teamMemberOwnModel';
 /** Empty own-model state. The header is accepted and ignored so the cut cannot be inferred from it. */
 export function initOwnModel(_header, inheritedEventCount) {
     return { inheritedEventCount };
 }
-/** Fold one committed event. Ancestor events below the inherited cut are ignored. */
+/** Fold one committed Session event. Ancestor events below the inherited cut are ignored. */
 export function applyOwnModel(state, event) {
     if (event.type !== 'request/header')
         return state;

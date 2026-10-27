@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "派生 Subagent 工具",
-    "description": "委托子代理。默认关闭。除非兼容模式保留原生 Session 快照，否则读取当前宿主允许列表。"
+    "title": "启动独立子 Agent",
+    "description": "为新任务启动独立的子 Agent，支持按需指定模型与执行任务。"
   }
 }

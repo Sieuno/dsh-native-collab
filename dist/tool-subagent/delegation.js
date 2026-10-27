@@ -133,15 +133,11 @@ export function selectionFields(kind) {
     return {
         provider: {
             type: 'string',
-            description: live
-                ? 'LLM provider id. Checked against the current host allowlist when supplied. Omit both provider and model to inherit.'
-                : 'LLM provider id captured for this Session. Omit both provider and model to inherit.',
+            description: 'LLM provider id. Omit both provider and model to inherit.',
         },
         model: {
             type: 'string',
-            description: live
-                ? 'Model id. An id absent from the advertised catalog remains selectable when the current host allowlist includes it and the adapter can resolve it.'
-                : 'Model id captured for this Session. Catalog membership is advisory.',
+            description: 'Model id. Omit both provider and model to inherit.',
         },
         reasoning_effort: {
             type: 'string',

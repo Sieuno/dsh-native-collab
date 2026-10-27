@@ -4,8 +4,8 @@ import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const ts = require(process.env.DSH_TYPESCRIPT_ENTRY || 'typescript')
-const root = resolve(import.meta.dirname, '..')
-const official = process.env.DSH_SOURCE_ROOT || resolve(root, '../../plugins/deepseek-harness-dsh-v0.2.1-rc.2')
+const official = process.env.DSH_SOURCE_ROOT
+if (!official) throw new Error('Set DSH_SOURCE_ROOT to matching official DSH source before importing this fixture')
 const file = resolve(official,'packages/client/locale/src/client/index.ts')
 const settingsFile = resolve(official,'packages/client/locale/src/locale-settings.ts')
 const source = readFileSync(file,'utf8'), settings = readFileSync(settingsFile,'utf8')

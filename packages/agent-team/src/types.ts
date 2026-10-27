@@ -121,27 +121,6 @@ export interface TeamProjection {
   readonly failure?: string
 }
 
-/** Durable per-root logical request quota stored in the Host storage domain. */
-export interface TeamBudgetLedger {
-  readonly ledgerVersion: 1
-  readonly epoch: 1
-  readonly rootSessionId: string
-  readonly limit: number
-  readonly used: number
-  readonly firstDenied?: { readonly agentId: string; readonly turn: number; readonly step: number }
-}
-
-/** Read-only quota status visible to the host and request guard. */
-export type TeamBudgetView =
-  | { readonly status: 'not-started'; readonly limit: number; readonly used: 0 }
-  | {
-    readonly status: 'active' | 'exhausted'
-    readonly limit: number
-    readonly used: number
-    readonly firstDenied?: { readonly agentId: SessionId; readonly turn: number; readonly step: number }
-  }
-  | { readonly status: 'unavailable' }
-
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     /** Durable roster and non-deleted task board of the Team rooted at the projected Session. */
@@ -188,14 +167,8 @@ export interface Config {
    * rejects a present value instead of dropping it. Defaults to on.
    */
   readonly enhancedSelection?: boolean
-  /** Maximum logical model-request admissions in one persisted Team epoch. */
+  /** @deprecated Compatibility-only option; no request counting or cancellation is performed. */
   readonly maxLogicalRequests?: number
-}
-
-/** Atomic admission decision returned by the Team quota ledger. */
-export interface TeamBudgetReservation {
-  readonly admitted: boolean
-  readonly budget: TeamBudgetView
 }
 
 /** Input for creating one durable teammate. */
@@ -229,6 +202,8 @@ export interface SendTeamMessageRequest {
   readonly target: string
   readonly content: ContentBlock[]
   readonly signal: AbortSignal
+  /** A teammate's completion result to the Lead; this delivery is exempt from automatic-interaction accounting. */
+  readonly taskResult?: boolean
   /**
    * Lead uses native followup or steer. Teammates use the host delivery adapter.
    * Omitted stays steer. Any other value is rejected.

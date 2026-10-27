@@ -7,7 +7,7 @@
 
 ## 0.3.0
 
-> 本地测试版本，未发布到 npm。
+> 已发布至 npm（`latest`），GitHub Release 资产与 npm 包为同一文件。
 
 - 移除离线迁移 CLI（`dsh-native-collab-offline` 的 `bin`、离线内核与相关测试）；误卸载后的处理改为 FAQ 中的手工步骤，并在 `cordis.patch.yml` 顶部与 FAQ 说明「启动失败且 Profile 内存在外部启动覆盖文件」时的排查顺序。
 - 移除启动计划/应用端点（bootPlan/bootApply）、对应客户端弹窗与词条；管理页只保留只读状态、六项偏好保存与操作指南。

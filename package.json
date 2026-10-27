@@ -1,6 +1,6 @@
 {
   "name": "@sieuno/dsh-native-collab",
-  "version": "0.2.2-ux.6",
+  "version": "0.3.0",
   "description": "Deepseek Harness Agent协作增强（基于原版插件）. DeepSeek Harness agent collaboration enhancements (based on the original plugin). Unofficial community plugin / 非官方社区插件。",
   "icon": "./icons/subagent.svg",
   "type": "module",

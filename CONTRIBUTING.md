@@ -26,7 +26,7 @@
 npm 必须在 GitHub Release 完成后发布，使用：
 
 ```sh
-node scripts/publish-release.mjs v0.2.2
+node scripts/publish-release.mjs v0.3.0
 ```
 
 将版本换成待发布标签。此入口只下载该 Release 唯一的 TGZ，核对 GitHub 提供的文件哈希，然后将下载的同一文件发布到 npm。不会执行本地构建或 `npm pack`，也不会回退到本地源码目录。账号验证按 npm 提示完成；不要绕过此入口直接发布本地目录或本地打包文件。

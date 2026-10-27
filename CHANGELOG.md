@@ -4,6 +4,7 @@
 
 - 安装文档改为在当前使用的 Profile 下按包名安装，删除「先停止 Profile」的过时前置条件与不存在的本地产物路径，不再固定版本号或下载链接。
 - `scripts/publish-release.mjs` 在 Windows 上改为调用当前 Node 自带的 npm CLI（Node 已禁止无 shell 生成 `.cmd` 垫片），并支持通过 `NPM_OTP` 传入一次性验证码。
+- README 重写为长期稳定版本：去掉全部版本号、兼容声明与产物路径，相对链接改为绝对地址以适配 npm 包页，安装步骤前置并删除「先停止 Profile」，示例 Profile 名统一为占位符。npm 包页仍显示已发布版本的 README，待下次发版时一并更新。
 
 ## 0.3.0
 

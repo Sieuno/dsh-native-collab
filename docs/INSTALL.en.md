@@ -1,17 +1,18 @@
 # Installation and Usage Guide
 
-Local trial build (not published to npm), compatible with DSH `>=0.2.1-rc.1 <0.2.2-0` and Node `>=22.19.0`.
+Trial build. Full tests, real-Profile, and real-LLM-task validation are not complete; the declared compatibility range does not imply verified support. Compatible with DSH `>=0.2.1-rc.1 <0.2.2-0` and Node `>=22.19.0`.
 
 ## 1. Installation & Activation
 
-1. Stop services for the target Profile (e.g. `web`).
-2. Run installation from workspace root (or use absolute path to TGZ):
+1. Install into the Profile you actually use; there is no need to stop the running instance first (installation only writes dependencies into that Profile). Replace `<profile>` with your Profile name (the GUI default is usually `web`):
 
 ```sh
-dsh plugin --profile web add "./release/artifacts/current/sieuno-dsh-native-collab-<version>.tgz"
+dsh plugin --profile <profile> add @sieuno/dsh-native-collab
 ```
 
-3. Restart the Profile and open the plugin management page.
+When using a local or offline package, replace the package name with the path to the TGZ file.
+
+2. Close and restart that Profile, then open the plugin management page. When upgrading over a currently running older version, close that instance first to avoid Windows file locks.
 
 ## 2. Configuration & Automatic Saving
 

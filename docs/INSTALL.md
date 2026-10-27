@@ -1,17 +1,18 @@
 # 安装与使用指南
 
-本项目为本地试用版本（未发布至 npm），声明兼容 DSH `>=0.2.1-rc.1 <0.2.2-0` 与 Node `>=22.19.0`。
+本项目仍是试用版本：尚未完成完整测试、真实 Profile 与真实 LLM 任务验证，兼容 DSH `>=0.2.1-rc.1 <0.2.2-0` 与 Node `>=22.19.0`，声明的支持范围不代表已验证。
 
 ## 1. 安装与启用
 
-1. 停止目标 Profile 的运行服务（例如 `web`）。
-2. 在工作区根目录下执行安装命令（亦可使用 TGZ 包的绝对路径）：
+1. 在**你当前使用的 Profile** 下安装，无需先停止正在运行的实例（安装只向该 Profile 写入依赖）。把 `<profile>` 换成实际使用的 Profile 名（GUI 默认通常是 `web`）：
 
 ```sh
-dsh plugin --profile web add "./release/artifacts/current/sieuno-dsh-native-collab-<version>.tgz"
+dsh plugin --profile <profile> add @sieuno/dsh-native-collab
 ```
 
-3. 重启该 Profile 并进入插件管理页面。
+若使用本地或离线包，把包名换成对应的 TGZ 包路径。
+
+2. 关闭并重新启动该 Profile，然后进入插件管理页面。升级替换正在使用的旧版本时，建议先关闭该实例，避免 Windows 上的文件占用。
 
 ## 2. 设置配置与自动保存
 

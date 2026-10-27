@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- 安装文档改为在当前使用的 Profile 下按包名安装，删除「先停止 Profile」的过时前置条件与不存在的本地产物路径，不再固定版本号或下载链接。
+- `scripts/publish-release.mjs` 在 Windows 上改为调用当前 Node 自带的 npm CLI（Node 已禁止无 shell 生成 `.cmd` 垫片），并支持通过 `NPM_OTP` 传入一次性验证码。
+
 ## 0.3.0
 
 > 本地测试版本，未发布到 npm。

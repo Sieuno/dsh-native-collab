@@ -2,7 +2,7 @@
 
 **DeepSeek Harness agent collaboration enhancements (based on the original plugin)**: child Agent communication enhancements and Team model selection for DeepSeek Harness (DSH). An unofficial community plugin derived from DeepSeek Harness. [中文](README.md).
 
-**Status**: Local trial build (not published to npm). Declared compatibility: DSH `>=0.2.1-rc.1 <0.2.2-0`, Node `>=22.19.0`.
+**Status**: Trial build. Full tests, real-Profile, and real-LLM-task validation are not complete; the declared compatibility range does not imply verified support. Declared compatibility: DSH `>=0.2.1-rc.1 <0.2.2-0`, Node `>=22.19.0`.
 
 [Installation Guide](docs/INSTALL.en.md) · [FAQ](docs/FAQ.en.md) · [Test Tiers](TESTING.md) · [Upstream](UPSTREAM.md)
 
@@ -30,14 +30,15 @@ Four tools are adapted in memory for the four known AgentPreset IDs and module i
 
 ## Installation & Setup
 
-1. Stop the target Profile (e.g. `web`).
-2. Run installation from workspace root (or use absolute path to TGZ):
+Install into the Profile you actually use; there is no need to stop the running instance first (installation only writes dependencies into that Profile). Replace `<profile>` with your Profile name (the GUI default is usually `web`):
 
 ```sh
-dsh plugin --profile web add "./release/artifacts/current/sieuno-dsh-native-collab-<version>.tgz"
+dsh plugin --profile <profile> add @sieuno/dsh-native-collab
 ```
 
-3. Restart the Profile and open the plugin management page:
+To install from a local or offline package, replace the package name with the path to the TGZ file. After installing or upgrading, close and restart that Profile to load the new version (a browser refresh alone is not a restart); when upgrading over a currently running older version, close that instance first to avoid Windows file locks.
+
+After the restart, open the plugin management page:
 - **Automatic Saving**: All changes save automatically without manual save buttons; errors appear beside the affected item.
 - **Activation**: Model source changes apply immediately to subsequent queries and creation; feature toggles and wake-up limits take effect after restarting the Profile as prompted (refreshing browser page does not count as restart).
 - **Uninstallation**: Removing the plugin removes the patch and restores native services. If manual entries were previously pinned, see the recovery guide in the [FAQ](docs/FAQ.en.md).

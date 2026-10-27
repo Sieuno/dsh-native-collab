@@ -1,5 +1,15 @@
 # 更新日志
 
+## Unreleased
+
+- 移除离线迁移 CLI（`dsh-native-collab-offline` 的 `bin`、离线内核与相关测试）；误卸载后的处理改为 FAQ 中的手工步骤，并在 `cordis.patch.yml` 顶部与 FAQ 说明「启动失败且 Profile 内存在外部启动覆盖文件」时的排查顺序。
+- 移除启动计划/应用端点（bootPlan/bootApply）、对应客户端弹窗与词条；管理页只保留只读状态、六项偏好保存与操作指南。
+- 删除旧 Team 请求账本与 rc 时期遗留模块及测试，测试统一登记到 `scripts/test.mjs` 的 unit/sdk/client/discovery 层。
+- `runningChildGuidance` 与 `completedChildContinuation` 改为保存后即时生效，无需重启；其余开关仍在重启后生效。
+- 重写面向 Agent 的 Team 与 Subagent 委派指引：明确 `subagent` 与 `spawn_teammate` 的取舍、`send_message` 的 steer/queue 与 Team 名册优先匹配、`list_agents`/`wait_agent` 的范围与「不活跃不等于完成」语义；去掉面向宿主的 native 措辞并拆分长段落。
+- 新增英文文档（README、INSTALL、FAQ）与文档一致性测试；清理过程文档、截图等非源码文件。
+- 构建校验：缺少宿主 SDK 声明时打印跳过提示，`DSH_HOST_CONTRACT=require` 可强制失败；CI 用固定与最新上游声明分别检查，并每日定时探测上游变化。
+
 ## 0.2.2-ux.6（本地修复试用包，未发布到 npm）
 
 - 移除按模型请求累计、耗尽后停止 Lead 与后代的旧 Team 请求账本，恢复同会话思考与用户输入不受该账本阻挡。

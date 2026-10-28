@@ -14,7 +14,7 @@
 dsh plugin --profile <profile> add @sieuno/dsh-native-collab
 ```
 
-使用本地或离线包时，把包名换成对应的 TGZ 包路径。安装或升级完成后，关闭并重新启动该 Profile 才会加载新版本（单纯刷新网页不算重启）；升级替换正在使用的旧版本时，建议先关闭该实例，避免 Windows 上的文件占用。
+启用/禁用插件后需重启DSH生效。
 
 重启后进入插件管理页面：
 

@@ -6,14 +6,22 @@ import { access, lstat, mkdir, readFile, realpath, rm, symlink } from 'node:fs/p
 import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { SDK_TARGETS } from '../host-compatibility.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
-const sdk = join(root, '.github/sdk')
+const args = process.argv.slice(2)
+let target = 'rc2', install = true
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === '--no-install') install = false
+  else if (args[i] === '--target' && args[i + 1]) target = args[++i]
+  else throw new Error('Usage: node scripts/ci/prepare-sdk.mjs [--target rc2|alpha2] [--no-install]')
+}
+assert(Object.hasOwn(SDK_TARGETS, target), 'Unknown SDK target: ' + target)
+const lane = SDK_TARGETS[target]
+const sdk = join(root, '.github/sdk', ...(target === 'rc2' ? [] : [target]))
 const sdkModules = join(sdk, 'node_modules')
 const rootModules = join(root, 'node_modules')
 const forbidden = ['@deepseek-ai/dsh-settings', '@deepseek-ai/dsh-config-editor', '@deepseek-ai/dsh-app-boot']
-const args = process.argv.slice(2)
-assert(args.every(arg => arg === '--no-install'), 'Usage: node scripts/ci/prepare-sdk.mjs [--no-install]')
 const manifest = JSON.parse(await readFile(join(sdk, 'package.json'), 'utf8'))
 const lock = JSON.parse(await readFile(join(sdk, 'package-lock.json'), 'utf8'))
 for (const [name, version] of Object.entries(manifest.dependencies)) {
@@ -24,7 +32,15 @@ for (const [name, version] of Object.entries(manifest.dependencies)) {
 // at the repository root, where integration tests require MODULE_NOT_FOUND.
 for (const name of forbidden) assert(!Object.hasOwn(manifest.dependencies, name), `Do not expose Host package: ${name}`)
 
-if (!args.includes('--no-install')) {
+for (const [name, version] of Object.entries(manifest.dependencies)) {
+  if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(version, lane.version, 'Mixed SDK line: ' + name)
+}
+for (const [name, version] of Object.entries({ '@deepseek-ai/cordis': lane.cordis, '@deepseek-ai/cordis-plugin-loader': lane.loader, '@deepseek-ai/schemastery': lane.schemastery })) {
+  assert.equal(manifest.dependencies[name], version, 'Incorrect singleton/loader version: ' + name)
+}
+if (target === 'alpha2') assert.equal(manifest.dependencies['@deepseek-ai/dsh-tool-executor-native'], lane.version)
+
+if (install) {
   const npmArgs = ['ci', '--prefix', sdk, '--cache', join(sdk, '.npm-cache'), '--ignore-scripts', '--legacy-peer-deps', '--no-audit', '--no-fund', '--fetch-timeout=30000', '--fetch-retries=1']
   let command = 'npm', commandArgs = npmArgs
   if (process.platform === 'win32') {
@@ -92,5 +108,5 @@ for (const name of ['@deepseek-ai/cordis', '@deepseek-ai/schemastery', 'zod']) {
 for (const name of ['@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-system-prompt', '@deepseek-ai/dsh-session-projection', '@deepseek-ai/dsh-scope']) {
   await import(pathToFileURL(require.resolve(name)).href)
 }
-console.log('Real pinned SDK ready; Cordis/Schemastery/zod are singletons; Host packages remain unresolvable.')
+console.log('Real pinned SDK ' + lane.version + ' ready; Cordis/Schemastery/zod are singletons; Host packages remain unresolvable.')
 console.log('Types: npm run check:types')

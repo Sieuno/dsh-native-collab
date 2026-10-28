@@ -44,21 +44,32 @@ jobs:
         run: git diff --exit-code
 
   sdk:
-    name: SDK runtime, strict types and isolated load
+    name: SDK / ${{ matrix.target }} / Node ${{ matrix.node }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: rc2
+            node: '22.19.0'
+          - target: alpha2
+            node: '24.19.0'
+    env:
+      DSH_SDK_ENVIRONMENT: sdk-only
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.19.0'
+          node-version: ${{ matrix.node }}
           cache: npm
           cache-dependency-path: |
             package-lock.json
             .github/sdk/package-lock.json
+            .github/sdk/alpha2/package-lock.json
       - run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
       - name: Prepare locked, executable SDK
-        run: node scripts/ci/prepare-sdk.mjs
+        run: node scripts/ci/prepare-sdk.mjs --target ${{ matrix.target }}
       - run: node scripts/emit-dist.mjs --check
         env:
           DSH_HOST_CONTRACT: require
@@ -71,7 +82,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sdk-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          name: sdk-diagnostics-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: .test-artifacts/*.json
           if-no-files-found: ignore
           retention-days: 7

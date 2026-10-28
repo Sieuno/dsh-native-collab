@@ -6,6 +6,7 @@
  */
 /** Durable per-session state for the user-controlled model-selection opt-in. */
 import { z as zod } from 'zod';
+import { readProjectionState } from '../subagent/internal.js';
 import { assertAllowedModelRoutes } from "./model-selection.js";
 const modelSelectionPolicySchema = zod.array(zod.object({
     provider: zod.string().min(1),
@@ -35,7 +36,7 @@ export const subagentModelSelectionProjectionDefinition = {
  * @returns a detached route list, or undefined for the fixed-route definition.
  */
 export function subagentModelSelectionPolicy(projections, session) {
-    return projections.stateOf(session, 'subagentModelSelectionPolicy')?.map(route => ({ ...route }));
+    return readProjectionState(projections.stateOf(session, 'subagentModelSelectionPolicy'), modelSelectionPolicySchema)?.map(route => ({ ...route }));
 }
 /**
  * Append the route policy once, before its definition can reach a model request.

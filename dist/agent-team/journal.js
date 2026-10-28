@@ -1,4 +1,6 @@
 /** Serialized Team transactions over the exact live Lead Session log. */
+import { teamProjectionDefinition } from "./projection.js";
+import { readProjectionState } from '../subagent/internal.js';
 /** Owns per-Lead transaction order and committed Team event publication. */
 export class TeamJournal {
     ctx;
@@ -18,7 +20,7 @@ export class TeamJournal {
      * @returns current projected state selected by the Lead Team id.
      */
     state(root) {
-        const projection = this.ctx.sessionProjections.stateOf(root.session, 'agentTeam');
+        const projection = readProjectionState(this.ctx.sessionProjections.stateOf(root.session, 'agentTeam'), teamProjectionDefinition.stateSchema);
         if (projection === undefined)
             throw new Error('Agent Teams projection is not registered');
         if (projection.failure !== undefined)

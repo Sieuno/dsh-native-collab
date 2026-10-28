@@ -3,6 +3,7 @@
  * Service Definition and model-facing Agent messaging contract.
  * @module @deepseek-ai/dsh-subagent/internal
  */
+export { projectionDisposer, readProjectionState } from "./projection-compat.js";
 /** Process-stable identity carried only by the standard adjacent-Agent messaging tool. */
 export const adjacentAgentSendMessageTool = Symbol.for('dsh.subagent.adjacentAgentSendMessageTool');
 /**

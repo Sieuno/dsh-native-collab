@@ -21,4 +21,4 @@ export const subagentModelSelectionProjection = {
   }).strict()).min(1).nullable(),
   init: (_header?: unknown, _inheritedEventCount?: number) => initPolicy(),
   apply: applyPolicy,
-} satisfies ProjectionDefinition<'subagentModelSelectionPolicy'>
+} satisfies ProjectionDefinition<'subagentModelSelectionPolicy', PolicyState>

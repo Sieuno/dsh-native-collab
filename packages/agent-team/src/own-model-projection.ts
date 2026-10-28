@@ -3,7 +3,7 @@
  */
 import { z } from 'zod'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import { applyOwnModel, initOwnModel, OWN_MODEL_KEY } from './own-model.ts'
+import { applyOwnModel, initOwnModel, OWN_MODEL_KEY, type OwnModelState } from './own-model.ts'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
@@ -27,4 +27,4 @@ export const teamMemberOwnModelProjection = {
   }).strict(),
   init: initOwnModel,
   apply: applyOwnModel,
-} satisfies ProjectionDefinition<'teamMemberOwnModel'>
+} satisfies ProjectionDefinition<'teamMemberOwnModel', OwnModelState>

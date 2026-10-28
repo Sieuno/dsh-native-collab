@@ -94,6 +94,7 @@
     "build": "node scripts/emit-dist.mjs",
     "test": "node scripts/test.mjs unit",
     "test:sdk": "node scripts/test.mjs sdk",
+    "test:source": "node scripts/test.mjs source",
     "test:client": "node scripts/test.mjs client",
     "test:discovery": "node scripts/test.mjs discovery"
   },

@@ -52,7 +52,9 @@ function fiber(entry, parent = {}) {
 }
 
 test('transpileModule loads preset-adapter without cordis, disk, or a loader', () => {
-  assert.equal([...source.matchAll(/@deepseek-ai\/cordis/g)].length, 1)
+  const imports = ts.createSourceFile(sourcePath, source, ts.ScriptTarget.ES2022, true).statements.filter(ts.isImportDeclaration)
+  assert.deepEqual(imports.map(item => item.moduleSpecifier.text), ['@deepseek-ai/cordis', '@deepseek-ai/cordis-plugin-loader'])
+  assert.ok(imports.every(item => item.importClause?.isTypeOnly), 'all SDK imports are erased types')
   assert.match(source, /import type \{ Context, Fiber \} from '@deepseek-ai\/cordis'/)
   assert.doesNotMatch(compiled, /['"]@deepseek-ai\/cordis['"]|require\s*\(|import\s*\(|node:fs|writeFile|createRequire|\.loader\b/i)
   assert.deepEqual(loads, [])

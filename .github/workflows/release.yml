@@ -8,47 +8,37 @@ on:
 permissions:
   contents: write
 
-env:
-  SDK_CORDIS_PINNED: 4.0.5
-  SDK_SCHEMASTERY_PINNED: 3.18.5
-
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  checks:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/checks.yml
+
   release:
+    needs: checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '22.19.0'
           cache: npm
       - run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
-      # Declaration-only build checks need these optional SDK peers. npm reports them
-      # as unmet optional peers, so an explicit install is a no-op; unpack the
-      # published tarballs instead. Do not vendor them into the repo, and do not
-      # change the lockfile.
-      - name: 准备宿主 SDK 声明
-        run: |
-          mkdir -p _sdk_typings
-          cd _sdk_typings
-          for spec in "@deepseek-ai/cordis@${SDK_CORDIS_PINNED}" "@deepseek-ai/schemastery@${SDK_SCHEMASTERY_PINNED}"; do
-            file="$(npm pack --silent "$spec")"
-            directory="${spec%@*}"
-            name="${directory#@deepseek-ai/}"
-            mkdir -p "../node_modules/@deepseek-ai/${name}"
-            tar -xzf "$file" -C "../node_modules/@deepseek-ai/${name}" --strip-components=1
-            echo "prepared ${name} from ${file}"
-          done
+      - uses: ./.github/actions/sdk-typings
       - name: 核对版本标签
         run: node -e 'const p=require("./package.json"); if(process.env.GITHUB_REF_NAME !== "v"+p.version) throw new Error("Tag must match package version");'
-      - name: 构建运行文件
-        run: node scripts/emit-dist.mjs
+      - name: 核对待发布运行文件
+        run: node scripts/emit-dist.mjs --check
         env:
           DSH_HOST_CONTRACT: require
+      - run: npm run validate:package
       - name: 生成 TGZ 和发布说明
         run: |
           mkdir -p release-assets
@@ -57,8 +47,8 @@ jobs:
           import fs from "node:fs";
           const p = JSON.parse(fs.readFileSync("package.json", "utf8"));
           const text = fs.readFileSync("CHANGELOG.md", "utf8");
-          const heading = new RegExp("^## " + p.version.replace(/\./g, "\\.") + "(?:（|\\()?.*$", "m");
-          const match = heading.exec(text);
+          const match = [...text.matchAll(/^## (.*)$/gm)].find(item =>
+            item[1].startsWith(p.version) && /^(?:$|\s|[（(])/.test(item[1].slice(p.version.length)));
           if (!match) throw new Error("Missing changelog section: " + p.version);
           const section = text.slice(match.index + match[0].length).split("\n## ")[0].trim();
           const body = [

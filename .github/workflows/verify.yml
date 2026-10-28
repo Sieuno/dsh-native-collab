@@ -1,87 +1,41 @@
-name: 基础发布检查
+name: Verify
+
 on:
   push:
+    branches: ['**']
   pull_request:
   workflow_dispatch:
   schedule:
     - cron: '17 3 * * *'
+
 permissions:
   contents: read
-env:
-  SDK_CORDIS_PINNED: 4.0.5
-  SDK_SCHEMASTERY_PINNED: 3.18.5
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  verify:
+  required:
     if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        sdk: [pinned, latest]
-    continue-on-error: ${{ matrix.sdk == 'latest' }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - run: npm ci --ignore-scripts --legacy-peer-deps
-      - name: 选择 SDK 版本
-        run: |
-          if [ "${{ matrix.sdk }}" = "latest" ]; then
-            echo "SDK_SPECS=@deepseek-ai/cordis@^4 @deepseek-ai/schemastery@^3" >> "$GITHUB_ENV"
-          else
-            echo "SDK_SPECS=@deepseek-ai/cordis@${SDK_CORDIS_PINNED} @deepseek-ai/schemastery@${SDK_SCHEMASTERY_PINNED}" >> "$GITHUB_ENV"
-          fi
-      # Declaration-only build checks need these optional SDK peers. npm reports them
-      # as unmet optional peers, so an explicit install is a no-op; unpack the
-      # published tarballs instead. Do not vendor them into the repo, and do not
-      # change the lockfile.
-      - name: 准备宿主 SDK 声明
-        run: |
-          mkdir -p _sdk_typings
-          cd _sdk_typings
-          for spec in $SDK_SPECS; do
-            file="$(npm pack --silent "$spec")"
-            directory="${spec%@*}"
-            name="${directory#@deepseek-ai/}"
-            mkdir -p "../node_modules/@deepseek-ai/${name}"
-            tar -xzf "$file" -C "../node_modules/@deepseek-ai/${name}" --strip-components=1
-            echo "prepared ${name} from ${file}"
-          done
-      - run: node scripts/emit-dist.mjs --check
-        env:
-          DSH_HOST_CONTRACT: require
-      - run: node scripts/check-release.mjs
-        if: matrix.sdk == 'pinned'
-      - run: npm test
-        if: matrix.sdk == 'pinned'
+    uses: ./.github/workflows/checks.yml
+
+  # New upstream majors/minors must not silently replace the supported SDK.
   sdk-probe:
-    if: github.event_name == 'schedule'
+    name: Latest SDK declaration probe (advisory on pushes)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    continue-on-error: ${{ github.event_name != 'schedule' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '22.19.0'
           cache: npm
-      - run: npm ci --ignore-scripts --legacy-peer-deps
-      # Scheduled probe: only the newest published SDK is installed, so an upstream
-      # API break shows up here without turning ordinary pushes red.
-      - name: 准备最新宿主 SDK 声明
-        run: |
-          mkdir -p _sdk_typings
-          cd _sdk_typings
-          for spec in "@deepseek-ai/cordis@^4" "@deepseek-ai/schemastery@^3"; do
-            file="$(npm pack --silent "$spec")"
-            directory="${spec%@*}"
-            name="${directory#@deepseek-ai/}"
-            mkdir -p "../node_modules/@deepseek-ai/${name}"
-            tar -xzf "$file" -C "../node_modules/@deepseek-ai/${name}" --strip-components=1
-            echo "prepared ${name} from ${file}"
-          done
+      - run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - uses: ./.github/actions/sdk-typings
+        with:
+          latest: 'true'
       - run: node scripts/emit-dist.mjs --check
         env:
           DSH_HOST_CONTRACT: require

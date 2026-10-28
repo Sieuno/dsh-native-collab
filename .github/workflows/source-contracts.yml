@@ -1,0 +1,46 @@
+name: Pinned official source contracts
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  schedule:
+    - cron: '43 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    name: Settings and official bundle discovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # Keep the source, executable SDK lock and discovery hash on the same release.
+      # Do not expose the entire upstream workspace node_modules to the plugin.
+      - name: Checkout upstream dsh-v0.2.1-rc.2 source
+        uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: 687f282e8625c6b8d11ff58211a90524be2e4317
+          path: .test-artifacts/upstream
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            .github/sdk/package-lock.json
+      - run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - run: node scripts/ci/prepare-sdk.mjs
+      - run: node scripts/emit-dist.mjs --check
+        env:
+          DSH_HOST_CONTRACT: require
+      - name: Test settings source and discovery contracts
+        run: node scripts/test.mjs source discovery
+        env:
+          DSH_SOURCE_ROOT: ${{ github.workspace }}/.test-artifacts/upstream
+          DSH_OFFICIAL_SOURCE_ROOT: ${{ github.workspace }}/.test-artifacts/upstream
+      - name: Ensure checks did not change tracked files
+        run: git diff --exit-code

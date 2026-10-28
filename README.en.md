@@ -14,7 +14,7 @@ Install into **the Profile you currently use**; there is no need to stop the run
 dsh plugin --profile <profile> add @sieuno/dsh-native-collab
 ```
 
-To install from a local or offline package, replace the package name with the path to the TGZ file. After installing or upgrading, close and restart that Profile to load the new version (a browser refresh alone is not a restart); when upgrading over a currently running older version, closing that instance first is recommended to avoid Windows file locks.
+Restart DSH after enabling or disabling the plugin for the change to take effect.
 
 After the restart, open the plugin management page:
 

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { parse } from 'yaml'
 import { ASSEMBLY_ROLES } from '../dist/agent-team/assembly-layout.js'
+import { checkHostCompatibility } from './host-compatibility.mjs'
 
 // Independent public contract: never derive expected targets from the manifest under test.
 const expectedModules = {
@@ -42,7 +43,7 @@ const rows = ASSEMBLY_ROLES.map(role => {
 if (ASSEMBLY_ROLES.filter(role => role.placement === 'runtime').length !== 3 || ASSEMBLY_ROLES.filter(role => role.placement === 'preset').length !== 4) issues.push('assembly must have 3 runtime roles and 4 preset tool roles')
 if (pkg.name !== '@sieuno/dsh-native-collab' || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(pkg.version ?? '') || pkg.private === true) issues.push('package identity/publication configuration mismatch')
 if (pkg.publishConfig?.access !== 'public' || pkg.publishConfig?.registry !== 'https://registry.npmjs.org/') issues.push('npm publication target mismatch')
-if (pkg.engines?.dsh !== '>=0.2.1-rc.1 <0.2.2-0' || pkg.engines?.node !== '>=22.19.0') issues.push('engine compatibility range mismatch')
+issues.push(...checkHostCompatibility(pkg))
 if (pkg.dependencies?.zod !== '4.4.3' || pkg.dependencies?.['@deepseek-ai/schemastery'] !== undefined) issues.push('runtime dependency declaration mismatch')
 if (pkg.devDependencies?.typescript !== '5.9.3') issues.push('typescript source-build dependency missing')
 if (pkg.dsh?.bundle?.patch !== './cordis.patch.yml') issues.push('dsh.bundle.patch must point to ./cordis.patch.yml')

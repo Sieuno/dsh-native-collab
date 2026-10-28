@@ -48,7 +48,7 @@ if (pkg.dependencies?.zod !== '4.4.3' || pkg.dependencies?.['@deepseek-ai/schema
 if (pkg.devDependencies?.typescript !== '5.9.3') issues.push('typescript source-build dependency missing')
 if (pkg.dsh?.bundle?.patch !== './cordis.patch.yml') issues.push('dsh.bundle.patch must point to ./cordis.patch.yml')
 if (pkg.scripts?.['validate:package'] !== 'node scripts/check-release.mjs') issues.push('validate:package must be a direct Node-only package check')
-for (const doc of ['README.md', 'README.en.md', 'docs/INSTALL.md', 'docs/FAQ.md', 'LICENSE']) if (!(pkg.files ?? []).includes(doc)) issues.push(`${doc} must be included in the package files whitelist`)
+for (const doc of ['README.md', 'README.en.md', 'docs/INSTALL.md', 'docs/FAQ.md', 'TESTING.md', 'CONTRIBUTING.md', 'LICENSE']) if (!(pkg.files ?? []).includes(doc)) issues.push(`${doc} must be included in the package files whitelist`)
 if ((pkg.files ?? []).includes('.npmrc')) issues.push('.npmrc must remain source-project-only, not a runtime package file')
 if (pkg.exports?.['.'] !== './dist/agent-team/bootstrap.js') issues.push('root export must point to the single management bootstrap')
 if (pkg.exports?.['./client'] !== './dist/client.js') issues.push('client subpath export must point to the browser entry')

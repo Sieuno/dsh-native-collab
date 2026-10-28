@@ -92,7 +92,7 @@ test('publication metadata, lockfile, and packaging controls preserve public run
   assert.equal(manifest.engines.dsh, '>=0.2.1-rc.1 <0.2.2-0 || =0.2.2-alpha.2')
   for (const key of ['engines', 'peerDependencies', 'peerDependenciesMeta']) assert.deepEqual(lock.packages[''][key], manifest[key])
   assert.equal(manifest.scripts['validate:package'], 'node scripts/check-release.mjs')
-  for (const file of ['docs/INSTALL.md', 'docs/FAQ.md', 'TESTING.md']) assert.ok(manifest.files.includes(file))
+  for (const file of ['docs/INSTALL.md', 'docs/FAQ.md', 'TESTING.md', 'CONTRIBUTING.md']) assert.ok(manifest.files.includes(file))
   for (const file of ['HANDOFF.md', '.npmrc']) assert.ok(!manifest.files.includes(file))
   const npmrc = (await readFile(new URL('../.npmrc', import.meta.url), 'utf8')).trim().split(/\r?\n/)
   assert.deepEqual(npmrc, ['auto-install-peers=false', 'verify-deps-before-run=false', 'ignore-scripts=true'])

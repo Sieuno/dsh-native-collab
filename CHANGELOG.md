@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 本地验收包版本提升为 0.3.1（尚未发布），避免与旧 0.3.0 包混淆；补齐打包内校验器所需的 CONTRIBUTING 文档，并将其纳入发布契约。
+
 - 单包保留 0.2.1 rc 兼容范围，并精确增加 0.2.2-alpha.2；同步 Cordis / Schemastery 可选 peer，集中维护版本策略，不放开未来版本或复制宿主单例。
 - 投影兼容边界统一处理原有 disposer 与 handle promise 的释放，保留 callable-thenable 的旧生命周期；未知类型的 key 读取通过原投影 schema 校验，显式补全两代 SDK 共用的投影类型参数。
 - SDK 测试将旧单调用和新 NativeToolExecutor batch 差异收敛到共享适配器；CI 分别使用锁定的 rc2 / alpha2 SDK 与明确的 SDK-only 环境，保留 Host 包隔离负契约。

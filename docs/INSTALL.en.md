@@ -1,8 +1,10 @@
 # Installation and Usage Guide
 
-Trial build. Full tests, real-Profile, and real-LLM-task validation are not complete; the declared compatibility range does not imply verified support. Compatible with DSH `>=0.2.1-rc.1 <0.2.2-0` and Node `>=22.19.0`.
+Trial build. **One package** built from the current source supports DSH `>=0.2.1-rc.1 <0.2.2-0 || =0.2.2-alpha.2`, not future 0.2.2 releases; older published packages retain their own declarations. The plugin keeps Node `>=22.19.0`, while the DSH 0.2.2-alpha.2 host itself requires Node `>=24.9.0`. The plugin floor does not lower the host requirement. Declarations, SDK checks, and real-Host acceptance prove different things; see [Testing](../TESTING.md).
 
 ## 1. Installation & Activation
+
+**Prerequisite**: enable the official experimental Agent Teams bundle (`@deepseek-ai/dsh-experimental-agent-team-profile`) in the same Profile to provide the native service entries required for managed takeover. A default Web Profile may not include it. The plugin refuses missing or duplicate native providers; do not exempt unknown host versions to force activation.
 
 1. Install into the Profile you actually use; there is no need to stop the running instance first (installation only writes dependencies into that Profile). Replace `<profile>` with your Profile name (the GUI default is usually `web`):
 

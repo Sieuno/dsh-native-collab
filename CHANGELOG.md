@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- 单包保留 0.2.1 rc 兼容范围，并精确增加 0.2.2-alpha.2；同步 Cordis / Schemastery 可选 peer，集中维护版本策略，不放开未来版本或复制宿主单例。
+- 投影兼容边界统一处理原有 disposer 与 handle promise 的释放，保留 callable-thenable 的旧生命周期；未知类型的 key 读取通过原投影 schema 校验，显式补全两代 SDK 共用的投影类型参数。
+- SDK 测试将旧单调用和新 NativeToolExecutor batch 差异收敛到共享适配器；CI 分别使用锁定的 rc2 / alpha2 SDK 与明确的 SDK-only 环境，保留 Host 包隔离负契约。
+
 - 安装文档改为在当前使用的 Profile 下按包名安装，删除「先停止 Profile」的过时前置条件与不存在的本地产物路径，不再固定版本号或下载链接。
 - `scripts/publish-release.mjs` 在 Windows 上改为调用当前 Node 自带的 npm CLI（Node 已禁止无 shell 生成 `.cmd` 垫片），并支持通过 `NPM_OTP` 传入一次性验证码。
 - README 重写为长期稳定版本：去掉全部版本号、兼容声明与产物路径，相对链接改为绝对地址以适配 npm 包页，安装步骤前置并删除「先停止 Profile」，示例 Profile 名统一为占位符。npm 包页仍显示已发布版本的 README，待下次发版时一并更新。

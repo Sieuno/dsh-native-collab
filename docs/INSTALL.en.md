@@ -29,7 +29,7 @@ When using a local or offline package, replace the package name with the path to
 - **Single Management Entry**: The patch inserts only one management entry managing three backend services. Disabling this entry restores native services on restart.
 - **Preset Adaptation**: Dynamically adapts tools in memory for known AgentPresets without modifying preset files; unknown custom providers remain untouched. Root tools from experimental packages remain disabled.
 - **Consecutive Automatic Wake-up Limit**:
-  - Default: 32 rounds shared across the Team family to prevent infinite loops.
+  - Default: 32 rounds shared by all Agents associated with the session to prevent infinite loops.
   - Only counts uninterrupted cross-session automatic wake-ups and messages without user input.
   - Any human input in a related session resets the count immediately; in-memory count resets on restart.
   - Task completion/stop reports to direct parent or Team Lead are exempt.

@@ -65,6 +65,12 @@ test('english docs mirror the chinese contracts and are reachable from the engli
     assert.ok(enReadme.includes(target), `README.en.md missing link: ${target}`)
   }
   const pkg = JSON.parse(await read('package.json'))
+  for (const file of ['README.md', 'README.en.md']) {
+    const text = await read(file)
+    assert.ok(text.includes(pkg.engines.dsh), `${file} missing exact host range`)
+    assert.ok(text.includes('0.3.1'), `${file} missing first adapted package version`)
+    assert.ok(text.includes('22.19.0') && text.includes('24.9.0'), `${file} missing separate Node requirements`)
+  }
   for (const file of ['docs/INSTALL.md', 'docs/FAQ.md', 'docs/INSTALL.en.md', 'docs/FAQ.en.md']) {
     assert.ok(pkg.files.includes(file), `package files missing: ${file}`)
   }

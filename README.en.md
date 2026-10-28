@@ -6,6 +6,10 @@
 
 ---
 
+## Compatibility
+
+Starting with **0.3.1**, a single plugin package supports DSH `>=0.2.1-rc.1 <0.2.2-0 || =0.2.2-alpha.2`, excluding later alphas and stable 0.2.2. The locked rc2 / alpha2 SDKs have been validated separately. The plugin requires Node.js ≥22.19.0; the alpha2 host requires Node.js ≥24.9.0. Previously published packages do not gain this adaptation automatically; see the [Installation Guide](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/INSTALL.en.md).
+
 ## Installation & Quick Start
 
 Install into **the Profile you currently use**; there is no need to stop the running instance first (installation only writes dependencies into that Profile). Replace `<profile>` with your Profile name (the GUI default is usually `web`):
@@ -29,7 +33,7 @@ After the restart, open the plugin management page:
 |---|---|
 | Child Agent communication enhancements | The plugin settings page provides a main enhancement switch plus "accept additional instructions while working" and "allow continuing completed child conversations"; disabling enhancements retains native capabilities and permission rules. |
 | Model selection for Team and child Agents | Three model sources: the child model list set at conversation start, the child model list in current DSH settings, and all models currently available in DSH; the latter two are re-read on every query or Agent creation, subject to model adapter and permission checks. |
-| Consecutive automatic wake-up limit | 32 rounds by default, shared across the Team family to prevent multi-agent loops; only consecutive automatic wake-ups without user input are counted, user input or a process restart resets the count, and automatic child-task completion/stop reports are exempt. |
+| Consecutive automatic wake-up limit | 32 rounds by default, shared by all Agents associated with the session to prevent multi-agent loops; only consecutive automatic wake-ups without user input are counted, user input or a process restart resets the count, and automatic child-task completion/stop reports are exempt. |
 
 The plugin provides the same tools as the native client, but rewrites their implementations. This greatly improves the experience of working with child conversations/Subagents without injecting a bulky set of additional tools.
 

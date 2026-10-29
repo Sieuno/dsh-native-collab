@@ -2,7 +2,7 @@
 
 ## DeepSeek Harness
 
-此项目包含基于 DeepSeek Harness `dsh-v0.2.1-rc.2`（commit `687f282e8625c6b8d11ff58211a90524be2e4317`）派生的源文件与编译文件。`packages/tool-subagent` 复制并改编了官方 `packages/subagent/tool-subagent` 的工具 DSL、provider lifecycle、preset 校验和 startActivation 转发；选择策略读取点是本副本的差异。这不是官方 tool-subagent 的整包复制，官方树未被修改。文件头保留 MIT 及 `Copyright (c) 2026 DeepSeek`。本派生项目独立发布，不是官方 DSH 发布物；DSH/Cordis runtime 以宿主 peer 依赖声明，并非随包复制核心运行时。
+此项目包含基于 DeepSeek Harness 的源文件与编译文件。`packages/tool-subagent` 复制并改编了官方 `packages/subagent/tool-subagent` 的工具 DSL、provider lifecycle、preset 校验和 startActivation 转发；选择策略读取点是本项目的差异。这不是官方 tool-subagent 的整包复制，官方树未被修改。文件头保留 MIT 及 `Copyright (c) 2026 DeepSeek`。本派生项目独立发布，不是官方 DSH 发布物；DSH/Cordis runtime 以宿主 peer 依赖声明，并非随包复制核心运行时。
 
 ## Zod
 

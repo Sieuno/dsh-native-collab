@@ -26,13 +26,16 @@ const delegationTools = new Set();
  * @returns the sentence appended to the delegation note, or an empty string.
  */
 export function subagentMessagingGuidance(flags) {
-    if (flags?.completedChildContinuation === true) {
+    if (flags?.runningChildGuidance === true && flags.completedChildContinuation === true) {
         return ' For any running subagent, `send_message` can queue a message or force an interruption into its'
             + ' current work to redirect it; for an idle subagent, the same call assigns a new task.';
     }
     if (flags?.runningChildGuidance === true) {
         return ' For any running subagent, `send_message` can queue a message or force an interruption into its'
             + ' current work to redirect it.';
+    }
+    if (flags?.completedChildContinuation === true) {
+        return ' For an idle subagent, `send_message` assigns a new task.';
     }
     return '';
 }

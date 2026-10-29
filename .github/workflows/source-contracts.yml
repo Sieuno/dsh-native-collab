@@ -3,6 +3,7 @@ name: Pinned official source contracts
 on:
   workflow_call:
   workflow_dispatch:
+  # GitHub activates this schedule only after deployment to the default branch.
   schedule:
     - cron: '43 4 * * 1'
 

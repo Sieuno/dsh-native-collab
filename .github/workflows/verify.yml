@@ -22,7 +22,7 @@ jobs:
 
   # New upstream majors/minors must not silently replace the supported SDK.
   sdk-probe:
-    name: Latest SDK declaration probe (advisory on pushes)
+    name: Latest Cordis/Schemastery declaration probe (advisory on pushes)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     continue-on-error: ${{ github.event_name != 'schedule' }}

@@ -97,19 +97,27 @@ const enhanced = 'Balance execution speed with token cost. Do not delegate by de
   + ' Ask the subagent to report progress at key checkpoints and to send a final result message when it finishes.'
   + ' Use `wait_agent` only when no useful independent work remains.'
 const runningNote = ' For any running subagent, `send_message` can queue a message or force an interruption into its current work to redirect it.'
-const idleNote = runningNote.slice(0, -1) + '; for an idle subagent, the same call assigns a new task.'
+const idleNote = ' For an idle subagent, `send_message` assigns a new task.'
+const bothNotes = runningNote.slice(0, -1) + '; for an idle subagent, the same call assigns a new task.'
+// Exact output fixtures for dynamic branches, not natural-language/policy analysis.
+const messagingBranches = [
+  { running: false, continuation: false, note: '' },
+  { running: false, continuation: true, note: idleNote },
+  { running: true, continuation: false, note: runningNote },
+  { running: true, continuation: true, note: bothNotes },
+  { running: undefined, continuation: false, note: '' },
+  { running: undefined, continuation: true, note: idleNote },
+]
 
 for (const file of ['packages/tool-subagent/src/flow.ts', 'dist/tool-subagent/flow.js']) {
   const factory = callbackFactory(await read(file), file)
   for (const master of [false, true, undefined]) {
-    for (const running of [false, true]) {
-      for (const continuation of [false, true]) {
-        test(`${file}: master=${master}, running=${running}, continuation=${continuation}`, () => {
-          const f = fixture(factory, master, { runningChildGuidance: running, completedChildContinuation: continuation })
-          const base = master === true && continuation ? enhanced : original
-          assert.equal(f.render(), base + (continuation ? idleNote : running ? runningNote : ''))
-        })
-      }
+    for (const { running, continuation, note } of messagingBranches) {
+      test(`${file}: master=${master}, running=${running}, continuation=${continuation}`, () => {
+        const f = fixture(factory, master, { runningChildGuidance: running, completedChildContinuation: continuation })
+        const base = master === true && continuation ? enhanced : original
+        assert.equal(f.render(), base + note)
+      })
     }
   }
   test(`${file}: unset continuation follows enabled default, but master remains opt-in`, () => {
@@ -141,7 +149,7 @@ for (const file of ['packages/tool-subagent/src/flow.ts', 'dist/tool-subagent/fl
     f.flags.completedChildContinuation = true
     assert.equal(render(), enhanced + idleNote)
     f.flags.runningChildGuidance = true
-    assert.equal(render(), enhanced + idleNote)
+    assert.equal(render(), enhanced + bothNotes)
     f.flags = { runningChildGuidance: true, completedChildContinuation: false }
     assert.equal(render(), original + runningNote)
     f.service = undefined

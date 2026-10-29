@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { createHash } from 'node:crypto'
+import { sourceContract } from './source-contract-fixture.mjs'
 import { createRequire, registerHooks } from 'node:module'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -12,11 +12,9 @@ const officialRoot = process.env.DSH_OFFICIAL_SOURCE_ROOT
 if (!officialRoot) throw new Error('DSH_OFFICIAL_SOURCE_ROOT must point to the read-only official DSH source checkout')
 const require = createRequire(import.meta.url)
 const ts = require('typescript')
-const officialRosterPath = join(officialRoot, 'packages/test-support/client-runtime/src/assembly/bundle-roster.ts')
 const officialSiblingPath = join(officialRoot, 'packages/test-support/client-runtime/src/assembly/roster.ts')
 const manifestPath = join(officialRoot, 'packages/client/modules/src/client/manifest.ts')
-const source = await readFile(officialRosterPath, 'utf8')
-assert.equal(createHash('sha256').update(source).digest('hex'), 'bbbced22b0a0e5ea7053edd51f755995fe49b874a88215d56b808d54f1d730b8')
+const { rosterSource: source } = await sourceContract(officialRoot)
 const initializerStart = source.indexOf("\nconst webProfileServices: Readonly<Record<string, object | undefined>> = { profileContext: { name: 'web' } }")
 assert.notEqual(initializerStart, -1)
 assert.deepEqual(source.slice(initializerStart).trimEnd().split(/\r?\n/), [
@@ -30,7 +28,7 @@ assert.deepEqual(source.slice(initializerStart).trimEnd().split(/\r?\n/), [
 ])
 
 test('official bundleRoster discovers the active bare root and excludes disabled and subpath rows', async () => {
-  const artifacts = join(root, '.test-artifacts')
+  const artifacts = process.env.DSH_TEST_ARTIFACTS || join(root, '.test-artifacts')
   await mkdir(artifacts, { recursive: true })
   const temp = await mkdtemp(join(artifacts, 'client-discovery-'))
   let hooks

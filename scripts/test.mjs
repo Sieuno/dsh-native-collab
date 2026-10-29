@@ -31,6 +31,10 @@ const needs = new Set()
 if (selected.includes('source')) needs.add('DSH_SOURCE_ROOT')
 if (selected.includes('client')) needs.add('DSH_OFFICIAL_ASAR')
 if (selected.includes('discovery')) needs.add('DSH_OFFICIAL_SOURCE_ROOT')
+if (selected.includes('source') || selected.includes('discovery')) {
+  needs.add('DSH_COMPAT_TARGET')
+  needs.add('DSH_SDK_ENVIRONMENT')
+}
 for (const name of needs) if (!process.env[name]) throw new Error(`Selected test tier requires ${name}; see TESTING.md. No tests are silently skipped.`)
 const tests = [...new Set(selected.flatMap(tier => tiers[tier]))].map(name => `tests/${name}.test.mjs`)
 console.log(`Test tiers: ${selected.join(', ')} (${tests.length} functional files)`)

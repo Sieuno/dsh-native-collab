@@ -67,7 +67,7 @@ SDK 准备脚本要求 Cordis、Schemastery、zod 单例，并拒绝暴露 `@dee
 
 ### 版本差异的维护边界
 
-[版本策略](scripts/host-compatibility.mjs) 集中定义精确 SDK lane、独立锁文件目录、上游提交、roster SHA256 和宿主声明；[矩阵生成器](scripts/ci/compatibility-targets.mjs) 供 SDK 与源码工作流共用，拒绝移动 ref、重复版本/目录和未实现的执行模式。增加已审查版本时，新增清单项及其独立 SDK manifest/lockfile，审查源码差异后固定 commit/hash；无需再复制 workflow 中的版本列表。声明支持范围仍须单独审查更新，不能因为添加测试 lane 就自动放宽。SDK 的[执行适配器](tests/sdk-execution-fixture.mjs) 按清单的 `single` / `batch` 契约选取执行方式，实际路由断言不分叉；新 API 若不属于已有模式，必须先显式实现边界适配，不依靠捕获异常后猜测旧 API。`DSH_SDK_ENVIRONMENT` 必须显式设置：`sdk-only` 要求三个 Host 包不可解析；已有完整官方 Host 依赖树可选 `host`，此时验证 app-boot 包身份同版，但绝不求值该 Host 模块，不能把这一模式称为真实 Host 启动测试。
+[版本策略](scripts/host-compatibility.mjs) 集中定义精确 SDK lane、独立锁文件目录、上游提交、roster SHA256 和宿主声明；[矩阵生成器](scripts/ci/compatibility-targets.mjs) 供 SDK 与源码工作流共用，拒绝移动 ref、重复版本/目录和未实现的执行模式。增加已审查版本时，新增清单项及其独立 SDK manifest/lockfile，审查源码差异后固定 commit/hash；无需再复制 workflow 中的版本列表。声明支持 0.2.1（自 rc.1 起）及 0.2.2 系列（含预发布版）；锁定 lane 是可复现回归样本，不是支持上限，也不表示已逐个实测系列内所有版本。支持策略与测试采样分开维护；上游来源说明不再绑定单一开发基线，源码测试仍必须固定提交和哈希。SDK 的[执行适配器](tests/sdk-execution-fixture.mjs) 按清单的 `single` / `batch` 契约选取执行方式，实际路由断言不分叉；新 API 若不属于已有模式，必须先显式实现边界适配，不依靠捕获异常后猜测旧 API。`DSH_SDK_ENVIRONMENT` 必须显式设置：`sdk-only` 要求三个 Host 包不可解析；已有完整官方 Host 依赖树可选 `host`，此时验证 app-boot 包身份同版，但绝不求值该 Host 模块，不能把这一模式称为真实 Host 启动测试。
 
 [投影兼容层](packages/subagent/src/projection-compat.ts) 处理旧 disposer 与新 handle promise；不得在注册时 await 旧 callable-thenable 而提前释放投影。注册释放与 schema 校验的单元测试只证明该边界，SDK 测试才使用真实投影注册。source / discovery 已覆盖清单中的 rc2 和 alpha2：设置描述断言运行时值、继承层及用户层，发现层断言启用根入口且排除禁用项与子路径。设置夹具的 Profile 合并、协调与锁仍为显式单条目适配；不证明完整 Loader、原子写、RPC 或 Host 生命周期。ASAR 客户端协议夹具仍只针对原 rc2 安装版，不把矩阵绿灯称为 alpha2 客户端协议或真实浏览器验收。
 

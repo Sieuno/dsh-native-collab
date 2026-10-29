@@ -8,13 +8,13 @@
 
 - 本地验收包版本提升为 0.3.1（尚未发布），避免与旧 0.3.0 包混淆；补齐打包内校验器所需的 CONTRIBUTING 文档，并将其纳入发布契约。
 
-- 单包保留 0.2.1 rc 兼容范围，并精确增加 0.2.2-alpha.2；同步 Cordis / Schemastery 可选 peer，集中维护版本策略，不放开未来版本或复制宿主单例。
+- 单包支持 DSH 0.2.1（自 rc.1 起）及 0.2.2 系列，含预发布版；宿主版本声明与 DSH 可选 peer 同步，CI 继续使用锁定版本作回归样本，不复制宿主单例。Cordis / Schemastery 可选 peer 保留独立声明。
 - 投影兼容边界统一处理原有 disposer 与 handle promise 的释放，保留 callable-thenable 的旧生命周期；未知类型的 key 读取通过原投影 schema 校验，显式补全两代 SDK 共用的投影类型参数。
 - SDK 测试将旧单调用和新 NativeToolExecutor batch 差异收敛到共享适配器；CI 分别使用锁定的 rc2 / alpha2 SDK 与明确的 SDK-only 环境，保留 Host 包隔离负契约。
 
 - 安装文档改为在当前使用的 Profile 下按包名安装，删除「先停止 Profile」的过时前置条件与不存在的本地产物路径，不再固定版本号或下载链接。
 - `scripts/publish-release.mjs` 在 Windows 上改为调用当前 Node 自带的 npm CLI（Node 已禁止无 shell 生成 `.cmd` 垫片），并支持通过 `NPM_OTP` 传入一次性验证码。
-- 中英文 README 补充 0.3.1 单包的精确兼容范围及两代宿主的 Node.js 要求；保留 npm 包页可用的绝对链接、前置安装步骤与 Profile 占位符。npm 包页仍显示已发布版本的 README，待下次发版时一并更新。
+- 中英文 README 同步系列兼容策略、两代宿主的 Node.js 要求，以及按协作复杂度选型、Lead + 多角色 Subagent 的使用建议；明确服务接管由 Profile patch 完成，不由插件追加启动参数。保留 npm 包页可用的绝对链接、前置安装步骤与 Profile 占位符。npm 包页仍显示已发布版本的 README，待下次发版时一并更新。
 
 ## 0.3.0
 

@@ -1,6 +1,6 @@
 # Installation and Usage Guide
 
-Trial build. **One package** built from the current source supports DSH `>=0.2.1-rc.1 <0.2.2-0 || =0.2.2-alpha.2`, not future 0.2.2 releases; older published packages retain their own declarations. The plugin keeps Node `>=22.19.0`, while the DSH 0.2.2-alpha.2 host itself requires Node `>=24.9.0`. The plugin floor does not lower the host requirement. Declarations, SDK checks, and real-Host acceptance prove different things; see [Testing](../TESTING.md).
+Trial build. Starting with **0.3.1**, **one package** supports the DSH 0.2.1 (from rc.1) and 0.2.2 series, including prereleases; the package declares `>=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-0 <0.2.3-0`. Versions 0.3.0 and earlier support only the 0.2.1 series. The plugin requires Node `>=22.19.0`; when using DSH 0.2.2, you must also meet the host requirement of Node `>=24.9.0`. The plugin floor does not lower the host requirement. Locked CI versions provide reproducible regression checks, not a ceiling on series support; see [Testing](../TESTING.md) for the distinction between test coverage and real-Host acceptance.
 
 ## 1. Installation & Activation
 
@@ -37,4 +37,4 @@ When using a local or offline package, replace the package name with the path to
 
 ## 4. Uninstallation
 
-Removing the plugin automatically removes the patch and restores native services. Normal use needs no manual config editing. If DSH fails to start after uninstalling, disabling, or changing versions (usually because a `*.patch.json` external startup overlay under the Profile directory still references this plugin), follow the startup recovery steps in the [FAQ](FAQ.md); never clear the whole patch or delete session data.
+Before uninstalling, disable the plugin, restart the same Profile, and confirm that native services have been restored; then remove the plugin. Normal uninstallation removes the plugin patch. Normal use needs no manual config editing. If DSH fails to start after uninstalling, disabling, or changing versions (usually because a `*.patch.json` external startup overlay under the Profile directory still references this plugin), follow the startup recovery steps in the [FAQ](FAQ.md); never clear the whole patch or delete session data.

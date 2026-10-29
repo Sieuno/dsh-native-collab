@@ -1,7 +1,8 @@
 /** Reviewed compatibility policy, not a runtime version-detection heuristic.
- * Add exact prereleases deliberately; never promise future 0.2.2 releases.
+ * Support the 0.2.1 (from rc.1) and 0.2.2 series, including prereleases.
+ * Exact SDK/source pins below are regression samples, not support ceilings.
  */
-export const DSH_RANGE = '>=0.2.1-rc.1 <0.2.2-0 || =0.2.2-alpha.2'
+export const DSH_RANGE = '>=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-0 <0.2.3-0'
 export const NODE_RANGE = '>=22.19.0'
 export const CORDIS_RANGE = '4.0.5 || =4.0.6-alpha.1'
 export const SCHEMASTERY_RANGE = '3.18.5 || =3.18.6-alpha.1'

@@ -8,8 +8,8 @@ import { checkHostCompatibility, DSH_RANGE, CORDIS_RANGE, SCHEMASTERY_RANGE, SDK
 
 const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
-test('compatibility policy admits the old line and only the reviewed new prerelease', () => {
-  assert.equal(DSH_RANGE, '>=0.2.1-rc.1 <0.2.2-0 || =0.2.2-alpha.2')
+test('compatibility policy admits both supported series while regression targets remain pinned', () => {
+  assert.equal(DSH_RANGE, '>=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-0 <0.2.3-0')
   assert.equal(CORDIS_RANGE, '4.0.5 || =4.0.6-alpha.1')
   assert.equal(SCHEMASTERY_RANGE, '3.18.5 || =3.18.6-alpha.1')
   assert.deepEqual(checkHostCompatibility(manifest), [])
@@ -20,7 +20,7 @@ test('compatibility policy admits the old line and only the reviewed new prerele
   assert.equal(SDK_TARGETS.alpha2.execution, 'batch')
 })
 
-test('declaration checks reject broad ranges, missing peers, and duplicate singleton installs', () => {
+test('declaration checks reject unbounded ranges, missing peers, and duplicate singleton installs', () => {
   for (const mutate of [
     pkg => { pkg.engines.dsh = '>=0.2.1-rc.1' },
     pkg => { pkg.engines.node = '>=24.9.0' },

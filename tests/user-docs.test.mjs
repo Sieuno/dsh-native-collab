@@ -54,6 +54,22 @@ test('docs describe in-memory automatic wake limits and human-input resets rathe
   assert.match(faq, /不要上传整套配置或会话记录/)
 })
 
+test('readmes describe lightweight role-based collaboration and patch-based service switching in both languages', async () => {
+  for (const file of ['README.md', 'README.en.md']) {
+    const text = await readFile(join(root, file), 'utf8')
+    for (const marker of ['Lead', 'Subagent', 'Team', 'Profile patch', 'dsh-agent-teams']) {
+      assert.ok(text.includes(marker), `${file} missing: ${marker}`)
+    }
+    assert.doesNotMatch(text, /--overide/, `${file} contains a nonexistent startup argument`)
+  }
+  const zh = await readFile(join(root, 'README.md'), 'utf8')
+  const en = await readFile(join(root, 'README.en.md'), 'utf8')
+  assert.match(zh, /协作复杂度/)
+  assert.match(en, /coordination complexity/)
+  assert.match(zh, /而非由本插件追加 `--override`/)
+  assert.match(en, /does not append a `--override`/)
+})
+
 test('english docs mirror the chinese contracts and are reachable from the english README', async () => {
   const read = (file) => readFile(join(root, file), 'utf8')
   for (const file of ['docs/INSTALL.en.md', 'docs/FAQ.en.md']) {
@@ -67,12 +83,16 @@ test('english docs mirror the chinese contracts and are reachable from the engli
   const pkg = JSON.parse(await read('package.json'))
   for (const file of ['README.md', 'README.en.md']) {
     const text = await read(file)
-    assert.ok(text.includes(pkg.engines.dsh), `${file} missing exact host range`)
+    assert.ok(text.includes('0.2.1') && text.includes('0.2.2'), `${file} missing supported host series`)
     assert.ok(text.includes('0.3.1'), `${file} missing first adapted package version`)
     assert.ok(text.includes('22.19.0') && text.includes('24.9.0'), `${file} missing separate Node requirements`)
   }
   for (const file of ['docs/INSTALL.md', 'docs/FAQ.md', 'docs/INSTALL.en.md', 'docs/FAQ.en.md']) {
     assert.ok(pkg.files.includes(file), `package files missing: ${file}`)
+  }
+  for (const file of ['docs/INSTALL.md', 'docs/INSTALL.en.md']) {
+    const text = await read(file)
+    assert.ok(text.includes(pkg.engines.dsh), `${file} missing exact declared host range`)
   }
   const install = await read('docs/INSTALL.en.md')
   assert.match(install, /management entry/)

@@ -298,10 +298,17 @@ export async function applyDerivedDelegation(ctx, config, session) {
                 if (visible[0] !== toolName)
                     return '';
                 const names = visible.map(name => `\`${name}\``).join(' or ');
-                return `Start independent delegations with ${names} together in one assistant message and continue useful work while they run.`
-                    + ' Ask the subagent to report progress at checkpoints and to send a result message when it finishes;'
-                    + ' use `wait_agent` only when you specifically must pause all other activity until it completes.'
-                    + subagentMessagingGuidance(readChildMessageFlags(runtimeCtx));
+                const flags = readChildMessageFlags(runtimeCtx);
+                const note = assembly.communicationEnhancement === true && flags !== undefined && flags.completedChildContinuation !== false
+                    ? `Balance execution speed with token cost. Do not delegate by default: handle small or tightly coupled tasks directly. Use ${names} only when delegation offers a clear benefit.`
+                        + ' When multiple delegations are needed, run them concurrently only if duplicated context is limited and write scopes do not conflict; continue useful work while they run.'
+                        + ' For tasks sharing substantial context, prefer direct execution or reuse an existing agent.'
+                        + ' Ask the subagent to report progress at key checkpoints and to send a final result message when it finishes.'
+                        + ' Use `wait_agent` only when no useful independent work remains.'
+                    : `Start independent delegations with ${names} together in one assistant message and continue useful work while they run.`
+                        + ' Ask the subagent to report progress at checkpoints and to send a result message when it finishes;'
+                        + ' use `wait_agent` only when you specifically must pause all other activity until it completes.';
+                return note + subagentMessagingGuidance(flags);
             },
         });
         runtimeCtx.systemPrompt.context({

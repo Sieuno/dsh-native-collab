@@ -89,9 +89,10 @@ test('publication metadata, lockfile, and packaging controls preserve public run
   assert.equal(manifest.publishConfig.access, 'public')
   assert.equal(manifest.publishConfig.registry, 'https://registry.npmjs.org/')
   assert.equal(manifest.engines.node, '>=22.19.0')
-  assert.equal(manifest.engines.dsh, '>=0.2.1-rc.1 <0.2.2-0')
+  assert.equal(manifest.engines.dsh, '>=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-0 <0.2.3-0')
+  for (const key of ['engines', 'peerDependencies', 'peerDependenciesMeta']) assert.deepEqual(lock.packages[''][key], manifest[key])
   assert.equal(manifest.scripts['validate:package'], 'node scripts/check-release.mjs')
-  for (const file of ['docs/INSTALL.md', 'docs/FAQ.md', 'TESTING.md']) assert.ok(manifest.files.includes(file))
+  for (const file of ['docs/INSTALL.md', 'docs/FAQ.md', 'TESTING.md', 'CONTRIBUTING.md']) assert.ok(manifest.files.includes(file))
   for (const file of ['HANDOFF.md', '.npmrc']) assert.ok(!manifest.files.includes(file))
   const npmrc = (await readFile(new URL('../.npmrc', import.meta.url), 'utf8')).trim().split(/\r?\n/)
   assert.deepEqual(npmrc, ['auto-install-peers=false', 'verify-deps-before-run=false', 'ignore-scripts=true'])
@@ -131,4 +132,60 @@ test('retired root-only generator refuses without emitting partial configuration
     const { readdir } = await import('node:fs/promises')
     assert.deepEqual(await readdir(out), [])
   } finally { await rm(out, { recursive: true, force: true }) }
+})
+
+test('release waits for shared gates and preserves read-only checkout credentials', async () => {
+  const { parse } = await import('yaml')
+  assert.match(await readFile(join(root, '.gitattributes'), 'utf8'), /^\* text=auto eol=lf$/m)
+  const workflow = parse(await readFile(join(root, '.github/workflows/release.yml'), 'utf8'))
+  assert.equal(workflow.jobs.checks.uses, './.github/workflows/checks.yml')
+  assert.equal(workflow.jobs.checks.permissions.contents, 'read')
+  assert.equal(workflow.jobs.release.needs, 'checks')
+  const publish = workflow.jobs.release.steps.find(step => step.name === '发布 GitHub Release（仅 TGZ）').run
+  assert.match(publish, /gh release create/)
+  assert.doesNotMatch(publish, /--prerelease(?:\s|=|$)/)
+  assert.doesNotMatch(JSON.stringify(workflow), /npm publish/)
+  const checkout = workflow.jobs.release.steps.find(step => step.uses === 'actions/checkout@v4')
+  assert.equal(checkout.with['persist-credentials'], false)
+  const checks = parse(await readFile(join(root, '.github/workflows/checks.yml'), 'utf8'))
+  for (const command of ['npm test', 'npm run check:types', 'npm run check:load', 'npm run test:sdk']) {
+    assert.ok(Object.values(checks.jobs).flatMap(job => job.steps ?? []).some(step => step.run === command), command)
+  }
+  assert.equal(checks.jobs['source-contracts'].uses, './.github/workflows/source-contracts.yml')
+})
+
+test('release notes select only the exact version section and reject prefix collisions', async () => {
+  const { parse } = await import('yaml')
+  const { runInNewContext } = await import('node:vm')
+  const workflow = parse(await readFile(join(root, '.github/workflows/release.yml'), 'utf8'))
+  const step = workflow.jobs.release.steps.find(step => step.name === '生成 TGZ 和发布说明')
+  const snippet = /node --input-type=module -e '([\s\S]*?)\n\s*'/.exec(step.run)?.[1]
+  assert.ok(snippet, 'execute the actual release-note generator, without its shell or pack command')
+  const program = snippet.replace('import fs from "node:fs";', '')
+  assert.notEqual(program, snippet)
+  const render = (version, changelog) => {
+    let notes
+    runInNewContext(program, {
+      fs: {
+        readFileSync(file) {
+          if (file === 'package.json') return JSON.stringify({ version })
+          assert.equal(file, 'CHANGELOG.md')
+          return changelog
+        },
+        writeFileSync(file, body) { assert.equal(file, 'release-notes.md'); notes = body },
+      },
+      process: { env: { GITHUB_REF_NAME: 'v' + version } },
+    })
+    return notes
+  }
+  for (const heading of ['0.3.0', '0.3.0（2026-10-28）', '0.3.0 (2026-10-28)', '0.3.0 release']) {
+    const notes = render('0.3.0', '## 0.3.0-rc.1\nwrong prerelease\n## ' + heading + '\nwanted\n## 0.2.0\nolder')
+    assert.match(notes, /wanted/)
+    assert.doesNotMatch(notes, /wrong prerelease|older/)
+    assert.ok(notes.includes("dsh plugin --profile web add @sieuno/dsh-native-collab"))
+  }
+  for (const heading of ['0.3.0-rc.1', '0.3.01', '0.3.0+build.1', '0x3x0']) {
+    assert.throws(() => render('0.3.0', '## ' + heading + '\nwrong'), /Missing changelog section: 0.3.0/)
+  }
+  assert.match(render('0.3.0-rc.1', '## 0.3.0-rc.1\nprerelease'), /prerelease/)
 })

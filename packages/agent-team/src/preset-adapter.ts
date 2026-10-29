@@ -1,4 +1,5 @@
 import type { Context, Fiber } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/cordis-plugin-loader'
 
 export const MANAGED_PRESET_IDS = Object.freeze(['preset-standard', 'preset-minimal', 'preset-ptc', 'preset-cordis'])
 const PRESET_MODULE = '@deepseek-ai/dsh-agent-preset'

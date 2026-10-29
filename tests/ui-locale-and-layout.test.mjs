@@ -17,6 +17,10 @@ for (const language of ['en', 'zh']) {
   test(`${language}: source and emitted factories register flat current locale without preview strings`, async () => {
     const dictionary = JSON.parse(await readFile(new URL(`../locale/${language}.json`, import.meta.url), 'utf8')).collabUi
     for (const key of obsoleteKeys) assert.equal(Object.hasOwn(dictionary, key), false, key)
+    for (const key of ['quotaRemains', 'quotaUsageUnknown']) {
+      assert.ok(dictionary[key].includes(language === 'zh' ? '由会话所有 Agent 共享' : 'shared by all Agents associated with the session'))
+      assert.doesNotMatch(dictionary[key], /Team 家族|Team family/)
+    }
     for (const emitted of [false, true]) {
       const locale = createLocale(language), renderer = elementRenderer()
       const spec = await clientModule({}, { emitted })
@@ -26,7 +30,7 @@ for (const language of ['en', 'zh']) {
       }))
       try {
         const t = locale.bind('collabUi')
-        for (const key of ['settingsTitle', 'modelSourceAll', 'currentState', 'sourceLayer', 'runtimePhase']) {
+        for (const key of ['settingsTitle', 'modelSourceAll', 'currentState', 'sourceLayer', 'runtimePhase', 'quotaRemains', 'quotaUsageUnknown']) {
           assert.equal(t(key), dictionary[key])
         }
         for (const key of obsoleteKeys) assert.equal(t(key), key)

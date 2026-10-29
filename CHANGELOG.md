@@ -2,9 +2,23 @@
 
 ## Unreleased
 
+## 0.3.1（2026-10-29）
+
+- Subagent 附加通信说明分别按运行中指导与已完成继续开关输出，避免只开启后者时仍显示运行中指导文案；新版委派主提示词仍仅由通信增强与已完成继续开关决定。CI 最新声明探测明确为 Cordis / Schemastery 范围，并说明定时工作流需部署到默认分支后生效。
+
+- SDK 与官方源码 CI 共用可扩展的已审查版本清单，补齐 alpha2 设置 / 发现契约；源码提交、roster 哈希与 SDK 身份不匹配时直接失败，保留独立锁文件及最新声明的非阻断探测。
+
+- 连续自动唤醒上限说明改为“由会话所有 Agent 共享”，同步中英设置提示与文档，避免误读为仅适用于 Team；计数逻辑不变。
+
+- 版本提升为 0.3.1；补齐打包内校验器所需的 CONTRIBUTING 文档，并将其纳入发布契约。
+
+- 单包支持 DSH 0.2.1（自 rc.1 起）及 0.2.2 系列，含预发布版；宿主版本声明与 DSH 可选 peer 同步，CI 继续使用锁定版本作回归样本，不复制宿主单例。Cordis / Schemastery 可选 peer 保留独立声明。
+- 投影兼容边界统一处理原有 disposer 与 handle promise 的释放，保留 callable-thenable 的旧生命周期；未知类型的 key 读取通过原投影 schema 校验，显式补全两代 SDK 共用的投影类型参数。
+- SDK 测试将旧单调用和新 NativeToolExecutor batch 差异收敛到共享适配器；CI 分别使用锁定的 rc2 / alpha2 SDK 与明确的 SDK-only 环境，保留 Host 包隔离负契约。
+
 - 安装文档改为在当前使用的 Profile 下按包名安装，删除「先停止 Profile」的过时前置条件与不存在的本地产物路径，不再固定版本号或下载链接。
 - `scripts/publish-release.mjs` 在 Windows 上改为调用当前 Node 自带的 npm CLI（Node 已禁止无 shell 生成 `.cmd` 垫片），并支持通过 `NPM_OTP` 传入一次性验证码。
-- README 重写为长期稳定版本：去掉全部版本号、兼容声明与产物路径，相对链接改为绝对地址以适配 npm 包页，安装步骤前置并删除「先停止 Profile」，示例 Profile 名统一为占位符。npm 包页仍显示已发布版本的 README，待下次发版时一并更新。
+- 中英文 README 同步系列兼容策略、两代宿主的 Node.js 要求，以及按协作复杂度选型、Lead + 多角色 Subagent 的使用建议；明确服务接管由 Profile patch 完成，不由插件追加启动参数。保留 npm 包页可用的绝对链接、前置安装步骤与 Profile 占位符。npm 包页仍显示已发布版本的 README，待下次发版时一并更新。
 
 ## 0.3.0
 

@@ -6,6 +6,7 @@ import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
+import { sourceContract } from './source-contract-fixture.mjs'
 
 // Executes unmodified official SettingsForms, ConfigEditor and schema helpers,
 // with installed Cordis/Schemastery and real temporary YAML files. Profile layer
@@ -14,6 +15,7 @@ import { tmpdir } from 'node:os'
 const root = resolve(import.meta.dirname, '..')
 const official = process.env.DSH_SOURCE_ROOT
 assert.ok(official, 'Set DSH_SOURCE_ROOT to matching official DSH source before running this test')
+await sourceContract(official)
 const require = createRequire(import.meta.url)
 const ts = require(process.env.DSH_TYPESCRIPT_ENTRY || 'typescript')
 // FiberState is a const enum erased from the installed runtime exports.
@@ -141,6 +143,19 @@ test('actual SettingsForms + ConfigEditor reject invalid consecutive wake limits
     assert.deepEqual(await readFile(f.sidecar), unrelated)
     assert.equal(f.fiber.state, FiberState.ACTIVE)
     t.diagnostic('Official source SettingsForms.mutate/write -> ConfigEditor.edit -> Cordis internal/config; no RPC or full Host.')
+  } finally { await f.close() }
+})
+
+test('official settings descriptors read the running fiber value and distinguish inherited and profile layers', async () => {
+  const f = await fixture({ teamRequestLimit: 7, modelEnhancement: true }, { teamRequestLimit: 11, modelEnhancement: false })
+  try {
+    const descriptor = f.snapshot()
+    assert.equal(descriptor.value.teamRequestLimit, 7)
+    assert.equal(descriptor.value.modelEnhancement, true)
+    assert.equal(descriptor.base.teamRequestLimit, 11)
+    assert.equal(descriptor.base.modelEnhancement, false)
+    assert.equal(descriptor.user.teamRequestLimit, 7)
+    assert.equal(descriptor.user.modelEnhancement, true)
   } finally { await f.close() }
 })
 

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
+import { executeToolCall, mountToolExecutor, sdkEnvironment } from './sdk-execution-fixture.mjs'
+sdkEnvironment()
 const require = createRequire(import.meta.url)
 const installed = name => import(pathToFileURL(require.resolve(name)))
 const { Context } = await installed('@deepseek-ai/cordis')
@@ -17,6 +19,7 @@ const { collabHostDelivery } = await import('../dist/subagent/index.js')
 async function boot(order) {
   const ctx = new Context(), fibers = [], scopes = []
   fibers.push(await ctx.plugin(SystemPrompt), await ctx.plugin(ToolRuntime))
+  await mountToolExecutor(ctx, fibers)
   const caller = { id: 'lead-id' }, outsider = { id: 'outsider-id' }
   const members = [
     { id: caller.id, name: 'lead', role: 'lead', status: 'running', diagnostics: [] },
@@ -67,7 +70,7 @@ async function boot(order) {
   return {
     ctx, caller, outsider, sends, interrupts, members,
     call(name, args = {}, agent = caller) {
-      return ctx.tools.execute({ callId: `call-${++next}`, name, arguments: args, agent, signal: new AbortController().signal })
+      return executeToolCall(ctx, { callId: `call-${++next}`, name, arguments: args, agent, signal: new AbortController().signal })
     },
     async disposeCallerTools() { ctx.emit('agent/disposed', { agent: caller }) },
     async dispose() { for (const scope of scopes.reverse()) await scope.dispose(); for (const fiber of fibers.reverse()) await fiber.dispose() },

@@ -8,7 +8,9 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
+import { mountToolExecutor, sdkEnvironment } from './sdk-execution-fixture.mjs'
 
+const environment = sdkEnvironment()
 const root = new URL('../', import.meta.url)
 const require = createRequire(root)
 const importInstalled = async name => import(pathToFileURL(require.resolve(name)))
@@ -39,6 +41,7 @@ async function bootTools() {
   const fibers = []
   fibers.push(await ctx.plugin(SystemPrompt))
   fibers.push(await ctx.plugin(ToolRuntime))
+  await mountToolExecutor(ctx, fibers)
   fibers.push(await ctx.plugin(SessionProjectionRegistry))
   const agents = { items: [], list() { return this.items }, get(id) { return this.items.find(agent => agent.id === id) } }
   const sends = []
@@ -306,8 +309,14 @@ test('Team routing resolves one roster identity before send and never retries a 
   } finally { await harness.dispose() }
 })
 
-test('official Settings and ConfigEditor are not importable from the read-only SDK', async () => {
-  for (const name of ['@deepseek-ai/dsh-settings', '@deepseek-ai/dsh-config-editor', '@deepseek-ai/dsh-app-boot']) {
-    assert.throws(() => require.resolve(name), /Cannot find module/)
+test('SDK-only excludes Host packages; host mode resolves Host identity without loading it', async () => {
+  if (environment.mode === 'sdk-only') {
+    for (const name of ['@deepseek-ai/dsh-settings', '@deepseek-ai/dsh-config-editor', '@deepseek-ai/dsh-app-boot']) {
+      assert.throws(() => require.resolve(name), { code: 'MODULE_NOT_FOUND' })
+    }
+    return
   }
+  const hostEntry = require.resolve('@deepseek-ai/dsh-app-boot')
+  assert.ok(hostEntry)
+  assert.equal(environment.mode, 'host')
 })

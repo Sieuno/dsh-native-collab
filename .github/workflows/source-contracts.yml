@@ -1,0 +1,70 @@
+name: Pinned official source contracts
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  # GitHub activates this schedule only after deployment to the default branch.
+  schedule:
+    - cron: '43 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  targets:
+    name: Reviewed compatibility targets
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - id: targets
+        run: node scripts/ci/compatibility-targets.mjs --github-output >> "$GITHUB_OUTPUT"
+
+  source:
+    needs: targets
+    name: Source contracts / ${{ matrix.target }} / Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
+    env:
+      DSH_COMPAT_TARGET: ${{ matrix.target }}
+      DSH_SDK_ENVIRONMENT: sdk-only
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set external source fixture paths
+        run: |
+          echo "DSH_SOURCE_ROOT=$RUNNER_TEMP/upstream-$DSH_COMPAT_TARGET" >> "$GITHUB_ENV"
+          echo "DSH_OFFICIAL_SOURCE_ROOT=$RUNNER_TEMP/upstream-$DSH_COMPAT_TARGET" >> "$GITHUB_ENV"
+          echo "DSH_TEST_ARTIFACTS=$RUNNER_TEMP/source-contract-artifacts" >> "$GITHUB_ENV"
+      # Fetch only the reviewed commit; never install/build the upstream workspace.
+      - name: Checkout matching official source
+        env:
+          SOURCE_REF: ${{ matrix.sourceRef }}
+        run: |
+          git init "$DSH_SOURCE_ROOT"
+          git -C "$DSH_SOURCE_ROOT" remote add origin https://github.com/deepseek-ai/deepseek-harness.git
+          git -C "$DSH_SOURCE_ROOT" fetch --depth=1 origin "$SOURCE_REF"
+          git -C "$DSH_SOURCE_ROOT" checkout --detach FETCH_HEAD
+          test "$(git -C "$DSH_SOURCE_ROOT" rev-parse HEAD)" = "$SOURCE_REF"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            ${{ matrix.sdkDirectory }}/package-lock.json
+      - run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - run: node scripts/ci/prepare-sdk.mjs --target ${{ matrix.target }}
+      - run: node scripts/emit-dist.mjs --check
+        env:
+          DSH_HOST_CONTRACT: require
+      - name: Test settings source and discovery contracts
+        run: node scripts/test.mjs source discovery
+      - name: Ensure checks did not change tracked files
+        run: git diff --exit-code

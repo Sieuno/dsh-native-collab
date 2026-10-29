@@ -14,6 +14,7 @@ import { assertModelRouteAllowed, readCurrentModelSource, requireAssemblySnapsho
 import { hostDeliverPrompt, modelDeliverySelectionEnabled } from './host-delivery.ts'
 import { decideDelivery } from './selection.ts'
 import { TeamJournal } from './journal.ts'
+import { projectionDisposer } from '@dsh-native-collab/subagent/internal'
 import { TeamRuntimeLifecycle } from './lifecycle.ts'
 import { teamMemberOwnModelProjection } from './own-model-projection.ts'
 import { teamProjectionDefinition } from './projection.ts'
@@ -164,14 +165,13 @@ export class TeamService extends Service {
       if (membership !== undefined) this.activity.notify(membership.id)
     })
     ctx.effect(() => {
-      const disposeProjection = ctx.root.sessionProjections.register(teamProjectionDefinition)
-      const disposeOwnModel = ctx.root.sessionProjections.register(teamMemberOwnModelProjection)
+      const disposeProjection = projectionDisposer(ctx.root.sessionProjections.register(teamProjectionDefinition))
+      const disposeOwnModel = projectionDisposer(ctx.root.sessionProjections.register(teamMemberOwnModelProjection))
       return async () => {
         try {
           await this.disposeRuntime()
         } finally {
-          disposeProjection()
-          disposeOwnModel()
+          await Promise.all([disposeProjection(), disposeOwnModel()])
         }
       }
     }, 'agentTeams.runtimeLifecycle()')

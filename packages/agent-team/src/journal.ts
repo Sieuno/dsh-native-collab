@@ -4,6 +4,8 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionEventMap, SessionId } from '@deepseek-ai/dsh-session'
 import type { TeamEventType, TeamState } from './projection.ts'
+import { teamProjectionDefinition } from './projection.ts'
+import { readProjectionState } from '@dsh-native-collab/subagent/internal'
 
 type AppendTeamEvent = <T extends TeamEventType>(type: T, data: SessionEventMap[T]) => void
 type MutableTeamEventType = 'team/member' | 'team/task'
@@ -27,7 +29,10 @@ export class TeamJournal {
    * @returns current projected state selected by the Lead Team id.
    */
   state(root: Agent): TeamState {
-    const projection = this.ctx.sessionProjections.stateOf(root.session, 'agentTeam')
+    const projection = readProjectionState(
+      this.ctx.sessionProjections.stateOf(root.session, 'agentTeam'),
+      teamProjectionDefinition.stateSchema,
+    )
     if (projection === undefined) throw new Error('Agent Teams projection is not registered')
     if (projection.failure !== undefined) throw new Error(projection.failure)
     return projection

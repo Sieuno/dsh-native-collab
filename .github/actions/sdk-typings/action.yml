@@ -1,0 +1,28 @@
+name: Prepare SDK declarations
+description: Unpack the two published declaration packages without changing the project lockfile
+inputs:
+  latest:
+    description: Probe current compatible major versions instead of the supported exact versions
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PROBE_LATEST: ${{ inputs.latest }}
+      run: |
+        mkdir -p _sdk_typings
+        cd _sdk_typings
+        if [ "$PROBE_LATEST" = "true" ]; then
+          specs=("@deepseek-ai/cordis@^4" "@deepseek-ai/schemastery@^3")
+        else
+          specs=("@deepseek-ai/cordis@4.0.5" "@deepseek-ai/schemastery@3.18.5")
+        fi
+        for spec in "${specs[@]}"; do
+          file="$(npm pack --silent "$spec" --ignore-scripts)"
+          directory="${spec%@*}"
+          name="${directory#@deepseek-ai/}"
+          mkdir -p "../node_modules/@deepseek-ai/${name}"
+          tar -xzf "$file" -C "../node_modules/@deepseek-ai/${name}" --strip-components=1
+          echo "prepared ${name} from ${file}"
+        done

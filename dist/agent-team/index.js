@@ -9,6 +9,7 @@ import { assertModelRouteAllowed, readCurrentModelSource, requireAssemblySnapsho
 import { hostDeliverPrompt, modelDeliverySelectionEnabled } from "./host-delivery.js";
 import { decideDelivery } from "./selection.js";
 import { TeamJournal } from "./journal.js";
+import { projectionDisposer } from '../subagent/internal.js';
 import { TeamRuntimeLifecycle } from "./lifecycle.js";
 import { teamMemberOwnModelProjection } from "./own-model-projection.js";
 import { teamProjectionDefinition } from "./projection.js";
@@ -114,15 +115,14 @@ export class TeamService extends Service {
                 this.activity.notify(membership.id);
         });
         ctx.effect(() => {
-            const disposeProjection = ctx.root.sessionProjections.register(teamProjectionDefinition);
-            const disposeOwnModel = ctx.root.sessionProjections.register(teamMemberOwnModelProjection);
+            const disposeProjection = projectionDisposer(ctx.root.sessionProjections.register(teamProjectionDefinition));
+            const disposeOwnModel = projectionDisposer(ctx.root.sessionProjections.register(teamMemberOwnModelProjection));
             return async () => {
                 try {
                     await this.disposeRuntime();
                 }
                 finally {
-                    disposeProjection();
-                    disposeOwnModel();
+                    await Promise.all([disposeProjection(), disposeOwnModel()]);
                 }
             };
         }, 'agentTeams.runtimeLifecycle()');

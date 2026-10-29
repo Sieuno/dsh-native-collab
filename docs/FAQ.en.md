@@ -50,7 +50,7 @@ External startup overlays (`*.patch.json` files written by the local launcher un
 
 ## What is the consecutive automatic wake-up limit? How to resume when reached?
 
-The default limit is 32 consecutive automatic wake rounds shared across the Team family to prevent infinite loops.
+The default limit is 32 consecutive automatic wake rounds shared by all Agents associated with the session to prevent infinite loops.
 - **Counts only uninterrupted automatic interaction**: Only counts automatic messages without user intervention.
 - **Reset mechanism**: Any user input in a related session resets the counter immediately; process restart also resets it.
 - **Behavior at limit**: Throws `Automatic wake limit reached; message send failed.` to the sending agent without cancelling any agents. Reports to direct parent or Lead are exempt.

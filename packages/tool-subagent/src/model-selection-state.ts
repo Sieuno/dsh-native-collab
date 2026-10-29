@@ -10,6 +10,7 @@ import { z as zod } from 'zod'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
+import { readProjectionState } from '@dsh-native-collab/subagent/internal'
 import { assertAllowedModelRoutes, type AllowedModelRoute } from './model-selection.ts'
 
 declare module '@deepseek-ai/dsh-session/types' {
@@ -66,7 +67,10 @@ export function subagentModelSelectionPolicy(
   projections: Pick<SessionProjectionRegistry, 'stateOf'>,
   session: Session,
 ): AllowedModelRoute[] | undefined {
-  return projections.stateOf(session, 'subagentModelSelectionPolicy')?.map(route => ({ ...route }))
+  return readProjectionState(
+    projections.stateOf(session, 'subagentModelSelectionPolicy'),
+    modelSelectionPolicySchema,
+  )?.map(route => ({ ...route }))
 }
 
 /**

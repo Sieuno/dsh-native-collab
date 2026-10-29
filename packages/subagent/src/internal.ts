@@ -4,6 +4,8 @@
  * @module @deepseek-ai/dsh-subagent/internal
  */
 
+export { projectionDisposer, readProjectionState } from './projection-compat.ts'
+
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'

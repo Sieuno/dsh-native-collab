@@ -5,14 +5,15 @@ import { fileURLToPath } from 'node:url'
 const root = fileURLToPath(new URL('../', import.meta.url))
 const tiers = {
   unit: [
-    'auto-wake-guard', 'auto-wake-routing', 'auto-wake-delivery', 'interrupt-routing', 'agent-routing', 'child-activity', 'model-source', 'delegation-choice',
+    'auto-wake-guard', 'auto-wake-routing', 'auto-wake-delivery', 'interrupt-routing', 'agent-routing', 'child-activity', 'model-source', 'model-selection', 'delegation-choice',
     'client-status', 'feature-settings', 'locale-coverage', 'managed-runtime', 'preset-adapter', 'startup-declaration',
-    'release-exports', 'ui-diagnostics', 'ui-locale-and-layout', 'user-docs',
+    'host-compatibility', 'projection-compat', 'release-exports', 'ui-diagnostics', 'ui-locale-and-layout', 'user-docs',
   ],
   sdk: [
-    'actual-projection', 'child-guidance', 'model-selection', 'collab-ui-status', 'delegation-registration',
-    'remote-namespace', 'runtime-integration', 'tool-routing-scope', 'settings-host-contract',
+    'actual-projection', 'child-guidance', 'collab-ui-status', 'delegation-registration',
+    'remote-namespace', 'runtime-integration', 'tool-routing-scope',
   ],
+  source: ['settings-host-contract'],
   client: ['remote-protocol'],
   discovery: ['client-discovery'],
 }
@@ -27,9 +28,13 @@ for (const tier of selected) {
   if (!(tier in tiers)) throw new Error(`Unknown test tier ${tier}; choose ${Object.keys(tiers).join(', ')}`)
 }
 const needs = new Set()
-if (selected.includes('sdk')) needs.add('DSH_SOURCE_ROOT')
+if (selected.includes('source')) needs.add('DSH_SOURCE_ROOT')
 if (selected.includes('client')) needs.add('DSH_OFFICIAL_ASAR')
 if (selected.includes('discovery')) needs.add('DSH_OFFICIAL_SOURCE_ROOT')
+if (selected.includes('source') || selected.includes('discovery')) {
+  needs.add('DSH_COMPAT_TARGET')
+  needs.add('DSH_SDK_ENVIRONMENT')
+}
 for (const name of needs) if (!process.env[name]) throw new Error(`Selected test tier requires ${name}; see TESTING.md. No tests are silently skipped.`)
 const tests = [...new Set(selected.flatMap(tier => tiers[tier]))].map(name => `tests/${name}.test.mjs`)
 console.log(`Test tiers: ${selected.join(', ')} (${tests.length} functional files)`)

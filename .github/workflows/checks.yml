@@ -1,0 +1,96 @@
+name: Required checks
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  targets:
+    name: Reviewed compatibility targets
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - id: targets
+        run: node scripts/ci/compatibility-targets.mjs --github-output >> "$GITHUB_OUTPUT"
+
+  source-contracts:
+    uses: ./.github/workflows/source-contracts.yml
+
+  unit:
+    name: Unit / ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            node: '22.19.0'
+          - os: windows-latest
+            node: '22.19.0'
+          - os: ubuntu-latest
+            node: '24'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - uses: ./.github/actions/sdk-typings
+      - name: Verify committed build output
+        run: node scripts/emit-dist.mjs --check
+        env:
+          DSH_HOST_CONTRACT: require
+      - run: npm run validate:package
+      - run: npm test
+      - name: Verify package contents
+        run: npm pack --dry-run --ignore-scripts
+      - name: Ensure checks did not change tracked files
+        run: git diff --exit-code
+
+  sdk:
+    needs: targets
+    name: SDK / ${{ matrix.target }} / Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
+    env:
+      DSH_SDK_ENVIRONMENT: sdk-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            ${{ matrix.sdkDirectory }}/package-lock.json
+      - run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Prepare locked, executable SDK
+        run: node scripts/ci/prepare-sdk.mjs --target ${{ matrix.target }}
+      - run: node scripts/emit-dist.mjs --check
+        env:
+          DSH_HOST_CONTRACT: require
+      - run: npm run check:types
+      - run: npm run check:load
+      - run: npm run test:sdk
+      - name: Ensure checks did not change tracked files
+        run: git diff --exit-code
+      - name: Upload diagnostic reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-diagnostics-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .test-artifacts/*.json
+          if-no-files-found: ignore
+          retention-days: 7

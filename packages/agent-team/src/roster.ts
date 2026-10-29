@@ -21,6 +21,8 @@ import { TeamId } from './types.ts'
 import type {
   SpawnTeammateRequest,
   SpawnTeammateResult,
+  ConvertMembershipRequest,
+  TeamMembershipConversionResult,
   TeamMemberSnapshot,
   TeamMemberView,
 } from './types.ts'
@@ -38,6 +40,8 @@ export interface TeamMembership {
   readonly id: TeamId
   readonly role: 'lead' | 'teammate'
   readonly name: string
+  readonly memberId: SessionId
+  readonly epoch: number
 }
 
 /**
@@ -133,13 +137,13 @@ export class TeamRoster {
         if (root !== undefined) {
           const member = this.journal.state(root).members.find(candidate => candidate.id === agent.id)
           if (member?.phase === 'active' || member?.phase === 'provisioning') {
-            return { root, id: TeamId(root.id), role: 'teammate', name: member.name }
+            return { root, id: TeamId(root.id), role: 'teammate', name: member.name, memberId: member.id, epoch: member.epoch ?? 0 }
           }
           // A direct child outside the durable roster is not a teammate. Ordinary
           // host forks are independent roots; subagent descriptors distinguish
           // provider-owned workers that must not receive a nested Team identity.
           if (this.subagentDescriptor(agent)) return undefined
-          return { root: agent, id: TeamId(agent.id), role: 'lead', name: 'lead' }
+          return { root: agent, id: TeamId(agent.id), role: 'lead', name: 'lead', memberId: agent.id, epoch: 0 }
         }
       }
       // A continuation can briefly outlive its parent during child-first teardown.
@@ -147,7 +151,7 @@ export class TeamRoster {
       // resumed ordinary fork has no descriptor in its own suffix and remains a
       // valid new root whose inherited Team records stay outside its projected Team state.
       if (this.subagentDescriptor(agent)) return undefined
-      return { root: agent, id: TeamId(agent.id), role: 'lead', name: 'lead' }
+      return { root: agent, id: TeamId(agent.id), role: 'lead', name: 'lead', memberId: agent.id, epoch: 0 }
     } catch {
       // This method is used by lifecycle observers and teardown discovery. A
       // malformed durable stream is surfaced by authoritative Team operations;
@@ -204,6 +208,7 @@ export class TeamRoster {
       diagnostics: [],
     }]
     for (const member of state.members) {
+      if (member.phase === 'departed') continue
       const live = this.ctx.agents.get(member.id)
       const session = live?.session ?? this.ctx.sessions.get(member.id)
       result.push({
@@ -223,6 +228,74 @@ export class TeamRoster {
       })
     }
     return result
+  }
+
+  /**
+   * Persist a user-interface conversion edge without replacing the target Session.
+   * @param caller - exact Lead authorizing the roster edge.
+   * @param child - exact live target Agent.
+   * @param request - idempotency key and destination metadata.
+   * @returns durable edge receipt, marked replayed for an existing operation id.
+   */
+  async convertMembership(caller: Agent, child: Agent, request: ConvertMembershipRequest): Promise<TeamMembershipConversionResult> {
+    this.assertExactLead(caller)
+    const root = caller
+    const operationId = requiredText(request.operationId, 'operationId', 200)
+    return this.journal.transact(root.id, async () => {
+      const state = this.journal.state(root)
+      const replay = state.operations.find(receipt => receipt.operationId === operationId)
+      if (replay !== undefined) {
+        if (replay.memberId !== child.id || replay.to !== request.to) throw new TeamError('operationId was already used for another conversion', 'TEAM_INVALID_ARGUMENT')
+        try {
+          await this.journal.flush(root)
+        } catch (error: unknown) {
+          throw new TeamError('membership receipt replay flush failed; retry the same operationId', 'TEAM_MEMBERSHIP_COMMIT_UNCERTAIN', { cause: error })
+        }
+        return { ...replay, replayed: true }
+      }
+      if (this.ctx.agents.get(child.id) !== child) throw new TeamError('conversion target is not the exact live Agent', 'TEAM_INVALID_TARGET')
+      if (child.status === 'running') throw new TeamError('running Agents cannot change Team membership', 'TEAM_MEMBER_RUNNING')
+      const descriptor = foldSubagentDescriptor(child.session.snapshotEvents(child.session.inheritedEventCount))
+      if (child.session.header.parentSession !== root.id || descriptor?.mode !== 'continuable') {
+        throw new TeamError('conversion target must be a direct continuable child of this Lead', 'TEAM_INVALID_TARGET')
+      }
+      const prior = state.members.find(member => member.id === child.id)
+      const name = prior?.name ?? (request.name === undefined ? undefined : this.memberName(request.name))
+      if (prior !== undefined && request.name !== undefined && this.memberName(request.name) !== prior.name) throw new TeamError('rejoin must retain the historical teammate name', 'TEAM_INVALID_MEMBER_NAME')
+      if (prior !== undefined && request.description !== undefined && request.description !== prior.description) throw new TeamError('rejoin must retain the historical teammate description', 'TEAM_INVALID_ARGUMENT')
+      if (request.to === 'teammate') {
+        if (prior !== undefined && prior.phase !== 'departed') throw new TeamError('target is already a Team member', 'TEAM_INVALID_TARGET')
+        if (name === undefined) throw new TeamError('joining requires a teammate name', 'TEAM_INVALID_MEMBER_NAME')
+        if (prior === undefined && state.members.some(member => member.name === name)) throw new TeamError(`teammate name "${name}" was already used in this Team`, 'TEAM_MEMBER_NAME_TAKEN')
+        if (prior === undefined && state.members.length >= this.maxMembers) throw new TeamError(`Team member limit ${this.maxMembers} reached`, 'TEAM_MEMBER_LIMIT')
+        const snapshot: TeamMemberSnapshot = {
+          id: child.id, name, description: requiredText(prior?.description ?? request.description ?? descriptor.label, 'description', 200),
+          provider: requiredText(prior?.provider ?? descriptor.provider, 'provider', 200), context: prior?.context ?? (child.session.inheritedEventCount > 0 ? 'fork' : 'fresh'), phase: 'active', epoch: (prior?.epoch ?? 0) + 1,
+        }
+        const data = { version: 3 as const, teamId: TeamId(root.id), operationId, action: 'join' as const, memberId: child.id, epoch: snapshot.epoch ?? 1, member: snapshot }
+        try {
+          await this.journal.appendAndFlush(root, 'team/member', data)
+        } catch (error: unknown) {
+          throw new TeamError('membership commit outcome is uncertain; retry the same operationId', 'TEAM_MEMBERSHIP_COMMIT_UNCERTAIN', { cause: error })
+        }
+        const receipt = this.journal.state(root).operations.find(item => item.operationId === operationId)
+        if (receipt === undefined) throw new TeamError('membership commit flushed but its receipt is unavailable; retry the same operationId', 'TEAM_MEMBERSHIP_COMMIT_UNCERTAIN')
+        return receipt
+      }
+      if (prior === undefined || prior.phase !== 'active') throw new TeamError('only an active teammate can leave', 'TEAM_INVALID_TARGET')
+      if (state.tasks.some(task => task.ownerId === child.id && (task.status === 'pending' || task.status === 'in_progress'))) {
+        throw new TeamError('member owns pending or in-progress tasks; reassign or complete them before leaving', 'TEAM_MEMBER_HAS_TASKS')
+      }
+      const epoch = (prior.epoch ?? 0) + 1
+      try {
+        await this.journal.appendAndFlush(root, 'team/member', { version: 3, teamId: TeamId(root.id), operationId, action: 'leave', memberId: child.id, epoch })
+      } catch (error: unknown) {
+        throw new TeamError('membership commit outcome is uncertain; retry the same operationId', 'TEAM_MEMBERSHIP_COMMIT_UNCERTAIN', { cause: error })
+      }
+      const receipt = this.journal.state(root).operations.find(item => item.operationId === operationId)
+      if (receipt === undefined) throw new TeamError('membership commit flushed but its receipt is unavailable; retry the same operationId', 'TEAM_MEMBERSHIP_COMMIT_UNCERTAIN')
+      return receipt
+    })
   }
 
   /**
@@ -317,7 +390,7 @@ export class TeamRoster {
       if (rootId === undefined) continue
       const root = this.ctx.agents.get(rootId)
       if (root === undefined
-        || !this.journal.state(root).members.some(member => member.id === agent.id)) continue
+        || !this.journal.state(root).members.some(member => member.id === agent.id && (member.phase === 'active' || member.phase === 'provisioning'))) continue
       const children = teams.get(root) ?? []
       children.push(agent.id)
       teams.set(root, children)
@@ -564,7 +637,8 @@ export class TeamRoster {
       if (current === undefined) {
         throw new TeamError(`provisioned teammate "${terminal.id}" disappeared`, 'TEAM_PROVISIONING_CONFLICT')
       }
-      if (current.phase !== 'provisioning') return current.phase
+      if (current.phase === 'active' || current.phase === 'failed') return current.phase
+      if (current.phase === 'departed') throw new TeamError('provisioning teammate departed before settlement', 'TEAM_PROVISIONING_CONFLICT')
       await this.journal.appendAndFlush(root, 'team/member', {
         version: 2,
         teamId: TeamId(root.id),

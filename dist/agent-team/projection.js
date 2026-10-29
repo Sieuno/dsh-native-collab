@@ -49,7 +49,8 @@ const teamMemberSnapshotSchema = z.object({
     description: z.string(),
     provider: z.string(),
     context: z.enum(['fresh', 'fork']),
-    phase: z.enum(['provisioning', 'active', 'failed']),
+    phase: z.enum(['provisioning', 'active', 'failed', 'departed']),
+    epoch: nonNegativeSafeInteger.optional(),
     error: z.string().optional(),
 }).strict();
 const teamTaskSnapshotSchema = z.object({
@@ -73,11 +74,21 @@ const teamEventSelectorSchema = z.object({
     version: nonNegativeSafeInteger,
     teamId: teamIdSchema,
 }).loose();
-const teamMemberEventSchema = z.object({
+const legacyTeamMemberEventSchema = z.object({
     version: z.literal(2),
     teamId: teamIdSchema,
     member: teamMemberSnapshotSchema,
 }).strict();
+const teamMembershipEdgeSchema = z.object({
+    version: z.literal(3),
+    teamId: teamIdSchema,
+    operationId: z.string().min(1),
+    action: z.enum(['join', 'leave']),
+    memberId: sessionIdSchema,
+    epoch: positiveSafeInteger,
+    member: teamMemberSnapshotSchema.optional(),
+}).strict();
+const teamMemberEventSchema = z.union([legacyTeamMemberEventSchema, teamMembershipEdgeSchema]);
 const teamTaskEventSchema = z.object({
     version: z.literal(2),
     teamId: teamIdSchema,
@@ -106,6 +117,7 @@ export function emptyTeamState(rootId) {
         tasks: [],
         messages: [],
         delivered: [],
+        operations: [],
         nextTaskNumber: 1,
     };
 }
@@ -115,6 +127,11 @@ const teamProjectionEntrySchema = z.object({
     tasks: z.array(teamTaskSnapshotSchema),
     messages: z.array(teamMessageSnapshotSchema),
     delivered: z.array(teamMessageIdSchema),
+    operations: z.array(z.object({
+        operationId: z.string().min(1), memberId: sessionIdSchema,
+        from: z.enum(['teammate', 'subagent']), to: z.enum(['teammate', 'subagent']),
+        epoch: nonNegativeSafeInteger, replayed: z.boolean(), name: z.string().optional(),
+    }).strict()).default([]),
     nextTaskNumber: positiveSafeInteger,
     failure: z.string().optional(),
 }).strict();
@@ -163,9 +180,11 @@ function applyProjectionEvent(state, event) {
         const selector = parsePersisted(event.type, teamEventSelectorSchema, event.data);
         if (selector.teamId !== state.id)
             return state;
-        if (selector.version !== 2) {
+        const supported = event.type === 'team/member'
+            ? selector.version === 2 || selector.version === 3
+            : selector.version === 2;
+        if (!supported)
             throw new Error(`unsupported Agent Teams event version ${String(selector.version)}`);
-        }
         return applyCurrentTeamEvent(state, parseCurrentTeamEvent(event));
     }
     catch (error) {
@@ -184,7 +203,48 @@ function replaceAt(items, index, item) {
 function applyCurrentTeamEvent(state, event) {
     switch (event.type) {
         case 'team/member': {
-            const member = event.data.member;
+            if (event.data.version === 3) {
+                const edge = event.data;
+                if (state.operations.some(receipt => receipt.operationId === edge.operationId)) {
+                    throw new Error(`membership operation "${edge.operationId}" was recorded twice`);
+                }
+                const index = state.members.findIndex(candidate => candidate.id === edge.memberId);
+                const prior = state.members[index];
+                const priorEpoch = prior?.epoch ?? 0;
+                const nextEpoch = priorEpoch + 1;
+                if (edge.epoch !== nextEpoch)
+                    throw new Error(`membership epoch ${edge.epoch} is not next epoch ${nextEpoch}`);
+                let member;
+                let from;
+                let name;
+                if (edge.action === 'join') {
+                    if (prior !== undefined && prior.phase !== 'departed')
+                        throw new Error('only a departed identity may rejoin');
+                    if (edge.member === undefined || edge.member.id !== edge.memberId || edge.member.phase !== 'active') {
+                        throw new Error('join edge requires an active member snapshot');
+                    }
+                    const named = state.members.find(candidate => candidate.name === edge.member?.name);
+                    if (named !== undefined && named.id !== edge.memberId)
+                        throw new Error(`teammate name "${edge.member.name}" is reused by another member`);
+                    if (prior !== undefined && prior.name !== edge.member.name)
+                        throw new Error('rejoin must retain the historical member name');
+                    member = { ...edge.member, epoch: edge.epoch };
+                    from = 'subagent';
+                    name = member.name;
+                }
+                else {
+                    if (prior === undefined || prior.phase !== 'active')
+                        throw new Error('only an active teammate may leave');
+                    if (edge.member !== undefined)
+                        throw new Error('leave edge must not include a member snapshot');
+                    member = { ...prior, phase: 'departed', epoch: edge.epoch };
+                    from = 'teammate';
+                    name = prior.name;
+                }
+                const receipt = { operationId: edge.operationId, memberId: edge.memberId, from, to: edge.action === 'join' ? 'teammate' : 'subagent', epoch: edge.epoch, replayed: false, ...(name === undefined ? {} : { name }) };
+                return { ...state, members: replaceAt(state.members, index, member), operations: [...state.operations, receipt] };
+            }
+            const member = { ...event.data.member, epoch: event.data.member.epoch ?? 0 };
             const index = state.members.findIndex(candidate => candidate.id === member.id);
             const prior = state.members[index];
             const named = state.members.find(candidate => candidate.name === member.name);
@@ -250,7 +310,7 @@ const teamMemberProjectionSchema = z.object({
     id: sessionIdSchema,
     name: z.string(),
     role: z.enum(['lead', 'teammate']),
-    phase: z.enum(['provisioning', 'active', 'failed']),
+    phase: z.enum(['provisioning', 'active', 'failed', 'departed']),
     error: z.string().optional(),
 }).strict();
 const teamTaskViewSchema = z.object({
@@ -276,6 +336,8 @@ function buildTeamProjection(state) {
     const rootId = brandString(state.id);
     const members = [{ id: rootId, name: 'lead', role: 'lead', phase: 'active' }];
     for (const member of state.members) {
+        if (member.phase === 'departed')
+            continue;
         members.push({
             id: member.id,
             name: member.name,

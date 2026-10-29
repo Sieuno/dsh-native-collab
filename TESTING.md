@@ -40,7 +40,7 @@ npm run validate:package
 
 - [基础检查](.github/workflows/verify.yml) 在分支 push、PR 和手动触发时调用[共享门禁](.github/workflows/checks.yml)。本地层在 Linux / Node 22.19.0、Windows / Node 22.19.0 和 Linux / Node 24 上运行，并检查已提交构建产物、发布契约及 dry-run 打包。构建检查不允许悄悄重写 dist；[.gitattributes](.gitattributes) 固定文本 LF，避免 Windows checkout 的 CRLF 转换造成伪产物差异。
 - SDK job 分为 rc2 / Node 22.19.0 与 alpha2 / Node 24.19.0 两条独立 lane，分别使用 [.github/sdk/package-lock.json](.github/sdk/package-lock.json) 与 [.github/sdk/alpha2/package-lock.json](.github/sdk/alpha2/package-lock.json) 固定真实公开运行时及传递依赖；不混装两代声明。安装禁用生命周期脚本，随后执行完整 strict 类型检查、权限隔离加载与相同的 7 个 SDK 测试文件。不要用伪造模块、空声明或跳过测试来修复供应失败。
-- [官方源码契约](.github/workflows/source-contracts.yml) 同样属于共享门禁，并可独立手动执行／每周重跑。与 SDK job 一样从[版本清单](scripts/host-compatibility.mjs)生成矩阵，rc2 / alpha2 各自使用对应 Node、锁定 SDK、精确上游提交及 roster SHA256；检出后核对提交，执行前再核对源码与 SDK 版本和 roster 原文。设置源码与发现机制两个文件在每条 lane 上执行，不安装或构建整个上游工作区。
+- [官方源码契约](.github/workflows/source-contracts.yml) 同样属于共享门禁，并可独立手动执行／每周重跑。与 SDK job 一样从[版本清单](scripts/host-compatibility.mjs)生成矩阵，rc2 / alpha2 各自使用对应 Node、锁定 SDK、精确上游提交及 roster SHA256；检出后核对提交，执行前再核对 Git HEAD / 干净工作树、源码与 SDK 版本和 roster 原文；本地复现同样拒绝无 Git 身份的快照或已修改的检出。设置源码与发现机制两个文件在每条 lane 上执行，不安装或构建整个上游工作区。
 - 最新 Cordis / Schemastery 声明仅作兼容探测：普通 push / PR 不阻断，定时探测失败会直接使该定时工作流失败。它不替换固定 SDK 门禁。
 - [发布工作流](.github/workflows/release.yml) 必须等待同一套共享门禁成功，才会打包、创建 Release；不会用另一套较弱的测试替代发布前验证。
 
@@ -73,6 +73,6 @@ SDK 准备脚本要求 Cordis、Schemastery、zod 单例，并拒绝暴露 `@dee
 
 ## 外部验收前提
 
-`DSH_SOURCE_ROOT` 指向匹配 DSH 源码根目录；发现层另外直接读取官方 roster 源码，不依赖额外适配器入口。`DSH_OFFICIAL_ASAR` 指向已安装的客户端协议 asar。`DSH_TYPESCRIPT_ENTRY` 可指向已有兼容 TypeScript，测试不会自动安装依赖。所有外部路径均由调用者显式提供，不访问当前真实 Profile。
+`DSH_SOURCE_ROOT` 指向匹配版本清单精确提交的干净 Git 源码检出（含 Git 元数据，不接受解压快照）；发现层另外直接读取官方 roster 源码，不依赖额外适配器入口。`DSH_OFFICIAL_ASAR` 指向已安装的客户端协议 asar。`DSH_TYPESCRIPT_ENTRY` 可指向已有兼容 TypeScript，测试不会自动安装依赖。所有外部路径均由调用者显式提供，不访问当前真实 Profile。
 
 `npm test` 不是完整集成验收。模块导入、配置解析、源码断言或 SDK 工具注册通过，都不等于真实 Team 创建、任务执行、卸载恢复和浏览器交互已通过。真实 Host 验收应使用临时配置、模拟模型与独立数据目录，不访问真实账号、真实会话或付费模型。CI 的构建和本地层不能替代这些验收。

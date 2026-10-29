@@ -61,13 +61,14 @@ test('CI targets reject missing source pins, moving refs, unsafe paths and unimp
 
 test('source contracts reject mismatched SDK/source identities, changed text and unknown target selection', () => {
   const rosterSource = 'a small source-identity fixture, not an executable SDK'
-  const lane = { version: '0.2.1-rc.2', source: { rosterSha256: createHash('sha256').update(rosterSource).digest('hex') } }
+  const lane = { version: '0.2.1-rc.2', source: { ref: '1'.repeat(40), rosterSha256: createHash('sha256').update(rosterSource).digest('hex') } }
   const targets = { reviewed: lane }
-  const input = { target: 'reviewed', sourceVersion: lane.version, sdkVersion: lane.version, rosterSource }
+  const input = { target: 'reviewed', sourceVersion: lane.version, sdkVersion: lane.version, rosterSource, sourceHead: lane.source.ref, sourceStatus: '' }
   assert.equal(validateSourceContract(input, targets), lane)
   for (const patch of [
     { target: undefined }, { target: 'unknown' }, { sdkVersion: '0.2.2-alpha.2' },
     { sourceVersion: '0.2.2-alpha.2' }, { rosterSource: rosterSource + 'changed' },
+    { sourceHead: '2'.repeat(40) }, { sourceStatus: ' M packages/settings/settings/src/index.ts' },
   ]) assert.throws(() => validateSourceContract({ ...input, ...patch }, targets))
 })
 

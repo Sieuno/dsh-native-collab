@@ -1,7 +1,7 @@
 /**
  * Profile status surface for the collaboration bundle's client page.
- * Status and the legacy preview endpoint are read-only; no endpoint writes files
- * or changes the active assembly.
+ * Status and the legacy preview endpoint are read-only. Membership buttons write
+ * canonical Team session events, never profile files or the active assembly.
  * The volatile Config and immutable assembly snapshot remain owned by this Context.
  */
 import { Context } from '@deepseek-ai/cordis'
@@ -11,6 +11,8 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { ASSEMBLY_ROLES, classifyAssembly } from './assembly-layout.ts'
 import { ManagedRuntime, type ManagedRuntimeStatus } from './managed-runtime.ts'
 import { installPresetAdapter } from './preset-adapter.ts'
+import { parseMembershipExchangeRequest, requireMembershipUiPort } from './membership-ui.ts'
+import type { MembershipExchangeCandidate, MembershipExchangeRequest, MembershipExchangeResult } from './membership-ui.ts'
 
 const ROWS = ASSEMBLY_ROLES
 const ENABLE_LINKED = new Set<string>(ASSEMBLY_ROLES.filter(row => row.placement === 'runtime').map(row => row.legacyId))
@@ -231,6 +233,18 @@ export class CollabUiService extends TypertRemoteService {
       runtime,
       diagnosis,
     }
+  }
+
+  /** Read-only inventory for the conversion buttons; requires the managed Team runtime. */
+  @Remote
+  async membershipCandidates(): Promise<MembershipExchangeCandidate[]> {
+    return await requireMembershipUiPort(this.ctx.get('agentTeams')).candidates()
+  }
+
+  /** UI transport only: never registered as an agent/model tool. */
+  @Remote
+  async exchangeMembership(request: MembershipExchangeRequest): Promise<MembershipExchangeResult> {
+    return await requireMembershipUiPort(this.ctx.get('agentTeams')).convert(parseMembershipExchangeRequest(request))
   }
 
   /** Read-only preview; the profile is never written or snapshotted. */

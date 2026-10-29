@@ -14,7 +14,9 @@ import { assertModelRouteAllowed, readCurrentModelSource, requireAssemblySnapsho
 import { hostDeliverPrompt, modelDeliverySelectionEnabled } from './host-delivery.ts'
 import { decideDelivery } from './selection.ts'
 import { TeamJournal } from './journal.ts'
-import { projectionDisposer } from '@dsh-native-collab/subagent/internal'
+import { assertNoIdentityTransition, projectionDisposer } from '@dsh-native-collab/subagent/internal'
+import { MembershipExchange } from './membership-exchange.ts'
+import { membershipMessageAdmission, membershipObserver, membershipUiPort } from './membership-ui.ts'
 import { TeamRuntimeLifecycle } from './lifecycle.ts'
 import { teamMemberOwnModelProjection } from './own-model-projection.ts'
 import { teamProjectionDefinition } from './projection.ts'
@@ -40,6 +42,7 @@ export type * from './types.ts'
 export type { TeamMembership } from './roster.ts'
 export { TeamId, TeamMessageId, TeamTaskId } from './types.ts'
 export { TeamError } from './error.ts'
+export { assertTeamMessageIdentity, observeTeamMembership } from './membership-ui.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -129,6 +132,18 @@ export class TeamService extends Service {
   private readonly journal: TeamJournal
   private readonly roster: TeamRoster
   private readonly tasks: TeamTaskBoard
+  private readonly membershipListeners = new Set<(agent: Agent) => void>()
+  readonly [membershipMessageAdmission] = (caller: Agent, target: string): void => {
+    assertNoIdentityTransition(this.ctx.subagents, caller.id)
+    const membership = this.roster.membership(caller)
+    const historical = this.journal.state(membership.root).members.filter(member => member.name === target || member.id === target)
+    for (const member of historical) assertNoIdentityTransition(this.ctx.subagents, member.id)
+  }
+  readonly [membershipUiPort]: MembershipExchange
+  readonly [membershipObserver] = (listener: (agent: Agent) => void): (() => void) => {
+    this.membershipListeners.add(listener)
+    return () => { this.membershipListeners.delete(listener) }
+  }
 
   constructor(ctx: Context, config: Config = {}) {
     const snapshot = requireAssemblySnapshot(ctx)
@@ -158,6 +173,10 @@ export class TeamService extends Service {
       selectionPort(ctx, this.selectionEnhanced),
     )
     this.tasks = new TeamTaskBoard(this.journal, this.config.maxTasks)
+    this[membershipUiPort] = new MembershipExchange(ctx, this.roster, this.journal, this.lifecycle, child => {
+      for (const listener of this.membershipListeners) listener(child)
+      this.activity.notify(TeamId(child.session.header.parentSession ?? child.id))
+    })
 
     ctx.on('agent/created', ({ agent }) => { this.scheduleRecovery(agent); return undefined })
     ctx.on('agent/status', ({ agent }) => {
@@ -305,10 +324,12 @@ export class TeamService extends Service {
 
   /** Deliver an admitted send using the Lead's authority and the actual sender's identity. */
   private async sendAdmitted(caller: Agent, request: SendTeamMessageRequest): Promise<SendTeamMessageResult> {
+    this[membershipMessageAdmission](caller, request.target)
     const membership = this.roster.membership(caller)
     request.signal.throwIfAborted()
     const { root } = membership
     const target = resolveActiveMember(root, this.journal.state(root), request.target)
+    assertNoIdentityTransition(this.ctx.subagents, target.id)
     if (target.id === caller.id) throw new TeamError('a Team member cannot message itself', 'TEAM_SELF_MESSAGE')
     const taskResult = request.taskResult === true
     if (taskResult && (membership.role === 'lead' || target.id !== root.id)) {
@@ -374,7 +395,7 @@ export class TeamService extends Service {
   private scheduleRecovery(agent: Agent): void {
     queueMicrotask(() => {
       if (this.lifecycle.disposed) return
-      void this.roster.recoverFor(agent, this.lifecycle.signal).catch((error: unknown) => {
+      void this.roster.recoverFor(agent, this.lifecycle.signal).then(() => this[membershipUiPort].recover(agent)).catch((error: unknown) => {
         if (this.lifecycle.disposed) return
         this.ctx.logger.warn(`Agent Teams recovery for "${agent.id}" failed: ${errorMessage(error)}`)
       })

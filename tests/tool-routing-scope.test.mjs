@@ -36,11 +36,15 @@ async function boot(order) {
     childActivity() { return { runningIds: [], preparing: false } },
     observeChildActivity() { return () => {} },
   }
+  let teamEnabled = true, transitioning = false
+  const membershipListeners = new Set()
   const teams = {
+    [Symbol.for('@sieuno/dsh-native-collab.membershipObserver')](listener) { membershipListeners.add(listener); return () => membershipListeners.delete(listener) },
+    [Symbol.for('@sieuno/dsh-native-collab.membershipMessageAdmission')](_caller, target) { if (transitioning && ['mate', 'mate-id'].includes(target)) throw Object.assign(new Error('identity transition in progress; retry after it completes'), { code: 'IDENTITY_TRANSITION_IN_PROGRESS' }) },
     selectionEnhanced: true, communicationEnhanced: true,
-    tryMembership(agent) { return agent === caller ? { role: 'lead', name: 'lead', id: 'team' } : undefined },
+    tryMembership(agent) { return teamEnabled && agent === caller ? { role: 'lead', name: 'lead', id: 'team' } : undefined },
     membership() { return { role: 'lead', name: 'lead', id: 'team' } },
-    listMembers(agent) { assert.equal(agent, caller); return members },
+    listMembers(agent) { assert.equal(agent, caller); return transitioning ? members.filter(member => member.id !== 'mate-id') : members },
     async sendMessage(...args) { sends.push(['team', ...args]) },
     interrupt(...args) { interrupts.push(['team', ...args]); return { previousStatus: 'inactive' } },
     async waitForChange() { throw new Error('no active work must not register a Team wait') },
@@ -69,6 +73,8 @@ async function boot(order) {
   let next = 0
   return {
     ctx, caller, outsider, sends, interrupts, members,
+    setTransitioning(value) { transitioning = value },
+    setTeamMembership(enabled) { teamEnabled = enabled; for (const listener of membershipListeners) listener(caller) },
     call(name, args = {}, agent = caller) {
       return executeToolCall(ctx, { callId: `call-${++next}`, name, arguments: args, agent, signal: new AbortController().signal })
     },
@@ -104,6 +110,21 @@ for (const order of ['global-first', 'team-first']) test(`real scoped tool routi
     const interrupted = await f.call('interrupt_agent', { target: 'independent' })
     assert.equal(interrupted.isError, false); assert.deepEqual(interrupted.value, { accepted: true })
     assert.equal(f.interrupts[0][0], 'subagent'); assert.equal(f.interrupts[0][2].agent, f.caller)
+    f.setTransitioning(true)
+    const acceptedBefore = f.sends.length
+    for (const target of ['mate', 'mate-id']) {
+      const rejected = await f.call('send_message', { target, message: 'blocked' })
+      assert.equal(rejected.isError, true)
+      assert.match(JSON.stringify(rejected.content), /identity transition in progress/)
+    }
+    assert.equal(f.sends.length, acceptedBefore, 'removed roster alias must not fall through during conversion')
+    f.setTransitioning(false)
+    f.setTeamMembership(false)
+    assert.equal(f.ctx.tools.get('list_agents', f.caller), plainList, 'demotion reveals independent global tool definitions without Agent restart')
+    assert.equal(f.ctx.tools.get('team_task_create', f.caller), undefined)
+    f.setTeamMembership(true)
+    assert.deepEqual(f.ctx.tools.get('list_agents', f.caller).parameters.properties.scope.enum, ['all', 'team', 'children', 'descendants'])
+    assert.ok(f.ctx.tools.get('team_task_create', f.caller), 'promotion reinstalls Team tools on the same scope')
     await f.disposeCallerTools()
     assert.equal(f.ctx.tools.get('list_agents', f.caller), plainList, 'disposing Team scope reveals the global definition again')
   } finally { await f.dispose() }

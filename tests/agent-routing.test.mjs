@@ -174,6 +174,8 @@ const presentField = (args, key) => Object.hasOwn(args, key) && args[key] !== un
 const callingAgent = agent => { if (!agent) throw new Error('caller required'); return agent };
 const brandString = value => value;
 const normalizeSendFailure = error => error;
+// This fixture isolates route selection; admission is covered by real SDK scope and Manager tests.
+const assertTeamMessageIdentity = () => {};
 const rejectDisabledFields = () => { throw new Error('disabled') };
 export function makeSend(ctx) { const communicationOn = true, queue = true; return { ${execute.getText(teamAst)} } }
 `)

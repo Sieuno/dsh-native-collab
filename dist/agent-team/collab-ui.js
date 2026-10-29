@@ -36,6 +36,7 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import { ASSEMBLY_ROLES, classifyAssembly } from "./assembly-layout.js";
 import { ManagedRuntime } from "./managed-runtime.js";
 import { installPresetAdapter } from "./preset-adapter.js";
+import { parseMembershipExchangeRequest, requireMembershipUiPort } from "./membership-ui.js";
 const ROWS = ASSEMBLY_ROLES;
 const ENABLE_LINKED = new Set(ASSEMBLY_ROLES.filter(row => row.placement === 'runtime').map(row => row.legacyId));
 const COLLAB_UI_BRAND = Symbol.for('@sieuno/dsh-native-collab.collabUi');
@@ -108,13 +109,19 @@ let CollabUiService = (() => {
     let _classSuper = TypertRemoteService;
     let _instanceExtraInitializers = [];
     let _status_decorators;
+    let _membershipCandidates_decorators;
+    let _exchangeMembership_decorators;
     let _preview_decorators;
     return class CollabUiService extends _classSuper {
         static {
             const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
             _status_decorators = [Remote];
+            _membershipCandidates_decorators = [Remote];
+            _exchangeMembership_decorators = [Remote];
             _preview_decorators = [Remote];
             __esDecorate(this, null, _status_decorators, { kind: "method", name: "status", static: false, private: false, access: { has: obj => "status" in obj, get: obj => obj.status }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _membershipCandidates_decorators, { kind: "method", name: "membershipCandidates", static: false, private: false, access: { has: obj => "membershipCandidates" in obj, get: obj => obj.membershipCandidates }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _exchangeMembership_decorators, { kind: "method", name: "exchangeMembership", static: false, private: false, access: { has: obj => "exchangeMembership" in obj, get: obj => obj.exchangeMembership }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _preview_decorators, { kind: "method", name: "preview", static: false, private: false, access: { has: obj => "preview" in obj, get: obj => obj.preview }, metadata: _metadata }, null, _instanceExtraInitializers);
             if (_metadata) Object.defineProperty(this, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
         }
@@ -224,6 +231,14 @@ let CollabUiService = (() => {
                 runtime,
                 diagnosis,
             };
+        }
+        /** Read-only inventory for the conversion buttons; requires the managed Team runtime. */
+        async membershipCandidates() {
+            return await requireMembershipUiPort(this.ctx.get('agentTeams')).candidates();
+        }
+        /** UI transport only: never registered as an agent/model tool. */
+        async exchangeMembership(request) {
+            return await requireMembershipUiPort(this.ctx.get('agentTeams')).convert(parseMembershipExchangeRequest(request));
         }
         /** Read-only preview; the profile is never written or snapshotted. */
         async preview(action) {

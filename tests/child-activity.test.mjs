@@ -16,6 +16,7 @@ function named(ast, name) {
 }
 const managerAst = parse(await read('packages/subagent/src/manager.ts'), 'manager.ts')
 const activationAst = parse(await read('packages/subagent/src/activation.ts'), 'activation.ts')
+const fenceAst = parse(await read('packages/subagent/src/identity-transition-fence.ts'), 'identity-transition-fence.ts')
 const runtimeAst = parse(await read('packages/subagent/src/index.ts'), 'index.ts')
 const runtimeClass = runtimeAst.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === 'SubagentRuntime')
 const runtimeMethods = ['childActivity', 'observeChildActivity'].map(name => {
@@ -37,6 +38,8 @@ const snapshotSubagentDescriptor = value => value;
 const captureDelegatedPolicyOverrides = () => ({});
 const applyChildComposition = async () => {};
 const captureLocalResult = () => ({ output: [], stopReason: 'completed' });
+${named(fenceAst, 'IdentityTransitionError')}
+${named(fenceAst, 'IdentityTransitionFence')}
 ${named(activationAst, 'activationAgent')}
 ${named(activationAst, 'observeLocalFailure')}
 ${named(activationAst, 'ActivationPool')}

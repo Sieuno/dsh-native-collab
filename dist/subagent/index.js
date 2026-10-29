@@ -80,7 +80,7 @@ import { installSubagentArchiveAdmission } from "./archive-admission.js";
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from "./projection.js";
 import { subagentCatalogProjectionDefinition } from "./catalog.js";
 import { assertHostDelivery, assertModelDeliveryEnabled, collabHostDelivery, resolveModelDelivery, } from "./delivery.js";
-import { deliverSubagentPrompt } from "./internal.js";
+import { assertIdentityTransitionGenerationInternal, assertNoIdentityTransitionInternal, captureIdentityTransitionGenerationInternal, deliverSubagentPrompt, setIdentityRecoveryInternal, withIdleContinuableInternal, } from "./internal.js";
 export * from "./out-of-process.js";
 export { AssistantOutputFold, finalAssistantOutput } from "./assistant-output.js";
 export { SubagentRunId } from "./types.js";
@@ -367,6 +367,26 @@ let SubagentRuntime = (() => {
             return selected === 'steer'
                 ? this.requireManager().steerPrompt(parent, childId, content, source, signal)
                 : this.requireManager().queuePrompt(parent, childId, content, source, signal);
+        }
+        /** Internal-only identity transition; not declared as a Service operation. */
+        [withIdleContinuableInternal](parent, childId, operation) {
+            return this.requireManager().withIdleContinuable(parent, childId, operation);
+        }
+        /** Internal Team caller guard for transition and durable recovery state. */
+        [assertNoIdentityTransitionInternal](childId) {
+            this.requireManager().assertNoIdentityTransition(childId);
+        }
+        /** Capture the Manager's identity generation after resolving a Team target. */
+        [captureIdentityTransitionGenerationInternal](childId) {
+            return this.requireManager().captureIdentityGeneration(childId);
+        }
+        /** Recheck a resolved Team target generation at synchronous message acceptance. */
+        [assertIdentityTransitionGenerationInternal](childId, generation) {
+            this.requireManager().assertIdentityGeneration(childId, generation);
+        }
+        /** Set or clear the fail-closed durable identity recovery block. */
+        [setIdentityRecoveryInternal](childId, blocked) {
+            this.requireManager().setIdentityRecovery(childId, blocked);
         }
         /**
          * Interrupt one live child's current execution under a human parent

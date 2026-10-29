@@ -86,7 +86,14 @@ import {
   collabHostDelivery,
   resolveModelDelivery,
 } from './delivery.ts'
-import { deliverSubagentPrompt } from './internal.ts'
+import {
+  assertIdentityTransitionGenerationInternal,
+  assertNoIdentityTransitionInternal,
+  captureIdentityTransitionGenerationInternal,
+  deliverSubagentPrompt,
+  setIdentityRecoveryInternal,
+  withIdleContinuableInternal,
+} from './internal.ts'
 
 export type {} from './catalog.ts'
 export * from './out-of-process.ts'
@@ -526,6 +533,35 @@ export class SubagentRuntime extends TypertRemoteService {
     return selected === 'steer'
       ? this.requireManager().steerPrompt(parent, childId, content, source, signal)
       : this.requireManager().queuePrompt(parent, childId, content, source, signal)
+  }
+
+  /** Internal-only identity transition; not declared as a Service operation. */
+  private [withIdleContinuableInternal]<T>(
+    parent: Agent,
+    childId: SessionId,
+    operation: (child: Agent, signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    return this.requireManager().withIdleContinuable(parent, childId, operation)
+  }
+
+  /** Internal Team caller guard for transition and durable recovery state. */
+  private [assertNoIdentityTransitionInternal](childId: SessionId): void {
+    this.requireManager().assertNoIdentityTransition(childId)
+  }
+
+  /** Capture the Manager's identity generation after resolving a Team target. */
+  private [captureIdentityTransitionGenerationInternal](childId: SessionId): number {
+    return this.requireManager().captureIdentityGeneration(childId)
+  }
+
+  /** Recheck a resolved Team target generation at synchronous message acceptance. */
+  private [assertIdentityTransitionGenerationInternal](childId: SessionId, generation: number): void {
+    this.requireManager().assertIdentityGeneration(childId, generation)
+  }
+
+  /** Set or clear the fail-closed durable identity recovery block. */
+  private [setIdentityRecoveryInternal](childId: SessionId, blocked: boolean): void {
+    this.requireManager().setIdentityRecovery(childId, blocked)
   }
 
   /**

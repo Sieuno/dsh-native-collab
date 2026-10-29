@@ -71,11 +71,32 @@ import { establishCatalogChild, establishExternalCatalogChild } from "./catalog.
 import { resolveModelDelivery } from "./delivery.js";
 import { SubagentError } from "./error.js";
 import { isAdjacentAgentSendMessageTool } from "./internal.js";
+import { IdentityTransitionError, IdentityTransitionFence } from "./identity-transition-fence.js";
 import { attachStructuredRuntime } from "./structured.js";
 import { ActivationPool, ChildLock, activationAgent, captureLocalResult, observeLocalFailure, requireLocalActivation } from "./activation.js";
 /** Render only the safe outer message from execution or teardown failures. */
 function failureMessage(error) {
     return error instanceof Error ? error.message : 'unknown teardown failure';
+}
+/** Fail closed unless a cold Session projection proves both inbox lanes are empty. */
+function persistedInboxIsEmpty(observation) {
+    const values = observation.projections?.values;
+    const inbox = values?.inbox;
+    const nextTurn = inbox?.['next-turn'];
+    const nextStep = inbox?.['next-step'];
+    if (!Array.isArray(nextTurn) || !Array.isArray(nextStep) || nextTurn.length !== 0 || nextStep.length !== 0)
+        return false;
+    const boundary = values?.turnBoundary;
+    if (boundary !== undefined && boundary.openTurnStartSeq !== null)
+        return false;
+    let openTurn;
+    for (const event of observation.events) {
+        if (event.type === 'turn/start')
+            openTurn = event.data.turn;
+        else if (event.type === 'turn/end' && openTurn === event.data.turn)
+            openTurn = undefined;
+    }
+    return openTurn === undefined;
 }
 /** Own subagent requests and the resources of every live activation. */
 export class SubagentManager {
@@ -93,8 +114,14 @@ export class SubagentManager {
     activityLineages = new WeakMap();
     /** Exact caller identity → subscriptions; callers own their cleanup. */
     childActivityWatchers = new Map();
-    /** Per-child serializer shared by delivery, release, and disposal. */
+    /** Per-child serializer shared by delivery, release, disposal, and transitions. */
     locks = new ChildLock();
+    /** Fences old identity routes before any transition awaits the child lock. */
+    identityTransitions = new IdentityTransitionFence();
+    /** Independently blocks ordinary admission while durable identity state needs recovery. */
+    identityRecoveryBlocked = new Set();
+    /** Cancels an active maintenance callback if its exact Activation is disposed. */
+    identityTransitionControllers = new Map();
     /** Structural Cordis owner of every Activation handle. */
     ownerCtx;
     /**
@@ -280,6 +307,222 @@ export class SubagentManager {
                 this.childActivityWatchers.delete(parent);
             }
         };
+    }
+    /** Fail closed while a durable membership transition is being recovered. */
+    assertNoIdentityTransition(childId) {
+        this.assertRecoveryAvailable(childId);
+        try {
+            this.identityTransitions.capture(childId);
+        }
+        catch (error) {
+            this.throwTransitionError(error);
+        }
+    }
+    /** Capture a resolved name→id route before any asynchronous work. */
+    captureIdentityGeneration(childId) {
+        this.assertRecoveryAvailable(childId);
+        try {
+            return this.identityTransitions.capture(childId);
+        }
+        catch (error) {
+            this.throwTransitionError(error);
+        }
+    }
+    /** Reject a stale name→id route at its final synchronous admission boundary. */
+    assertIdentityGeneration(childId, generation) {
+        this.assertRecoveryAvailable(childId);
+        try {
+            this.identityTransitions.assertCurrent(childId, generation);
+        }
+        catch (error) {
+            this.throwTransitionError(error);
+        }
+    }
+    /** Set or clear the independent fail-closed block for uncertain durable state. */
+    setIdentityRecovery(childId, blocked) {
+        const changed = blocked ? !this.identityRecoveryBlocked.has(childId) : this.identityRecoveryBlocked.has(childId);
+        if (!changed)
+            return;
+        if (blocked)
+            this.identityRecoveryBlocked.add(childId);
+        else
+            this.identityRecoveryBlocked.delete(childId);
+        this.identityTransitions.invalidate(childId);
+    }
+    /**
+     * Exclusively hold one exact same-parent local continuable child idle while
+     * the caller commits a durable identity transition. The transition fence is
+     * raised synchronously before any asynchronous query or lock acquisition.
+     */
+    async withIdleContinuable(parent, childId, operation) {
+        this.assertAdmitting(parent);
+        this.assertActivityCaller(parent);
+        const releaseTransition = this.identityTransitions.begin(childId, parent);
+        const transitionController = new AbortController();
+        this.identityTransitionControllers.set(childId, transitionController);
+        let releaseHold = () => { };
+        let preparation;
+        let resumed;
+        try {
+            releaseHold = this.holdOwnership(parent, childId);
+            preparation = this.beginChildPreparation(parent, childId, new AbortController().signal);
+            return await this.locks.run(childId, async () => {
+                preparation?.signal.throwIfAborted();
+                this.assertAdmitting(parent);
+                this.assertActivityCaller(parent);
+                let activation = this.resident.get(childId);
+                if (activation === undefined) {
+                    activation = await this.materializeForIdentityTransition(parent, childId, preparation.signal);
+                    resumed = requireLocalActivation(activation);
+                }
+                const local = requireLocalActivation(activation);
+                const child = local.handle.agent;
+                this.assertIdentityTransitionCandidate(parent, childId, local, resumed === local);
+                // Historical unloaded descendants keep the same parent SessionId and
+                // do not prevent a role-only transition. Live descendants/preparations
+                // are excluded by assertIdentityTransitionCandidate below.
+                return await child.runMaintenance(async (maintenanceSignal) => {
+                    const inputAbort = new AbortController();
+                    const stopInbox = child.ctx.on('agent/inbox/inserted', ({ agent }) => {
+                        if (agent === child)
+                            inputAbort.abort(new SubagentError('input arrived during identity transition', 'IDENTITY_TRANSITION_STALE'));
+                    });
+                    const stopStatus = child.ctx.on('agent/status', ({ agent }) => {
+                        if (agent === child && child.status !== 'idle')
+                            inputAbort.abort(new SubagentError('child became active during identity transition', 'IDENTITY_TRANSITION_STALE'));
+                    });
+                    const stopTurn = child.ctx.on('session/event', (session, event) => {
+                        if (session === child.session && event.type === 'turn/start') {
+                            inputAbort.abort(new SubagentError('child turn started during identity transition', 'IDENTITY_TRANSITION_STALE'));
+                        }
+                    });
+                    const stopChildActivity = this.observeChildActivity(child, new Set(), () => {
+                        inputAbort.abort(new SubagentError('descendant activity started during identity transition', 'IDENTITY_TRANSITION_STALE'));
+                    });
+                    const signal = AbortSignal.any([
+                        preparation.signal, maintenanceSignal, inputAbort.signal, transitionController.signal,
+                    ]);
+                    try {
+                        signal.throwIfAborted();
+                        this.assertIdentityTransitionCandidate(parent, childId, local, resumed === local);
+                        const value = await operation(child, signal);
+                        signal.throwIfAborted();
+                        this.assertIdentityTransitionCandidate(parent, childId, local, resumed === local);
+                        return value;
+                    }
+                    finally {
+                        stopInbox();
+                        stopStatus();
+                        stopTurn();
+                        stopChildActivity();
+                    }
+                });
+            });
+        }
+        finally {
+            if (this.identityTransitionControllers.get(childId) === transitionController) {
+                this.identityTransitionControllers.delete(childId);
+            }
+            if (resumed !== undefined)
+                this.announce(resumed);
+            preparation?.finish();
+            releaseHold();
+            releaseTransition();
+            const activation = this.resident.get(childId);
+            if (activation?.kind === 'local')
+                this.wake(activation);
+        }
+    }
+    /** Materialize persisted state without submitting a prompt or creating a child. */
+    async materializeForIdentityTransition(parent, childId, signal) {
+        const env_1 = { stack: [], error: void 0, hasError: false };
+        try {
+            const query = this.requireSessionQuery();
+            let observation;
+            try {
+                observation = await query.observeSession(childId, { signal });
+            }
+            catch (error) {
+                signal.throwIfAborted();
+                throw new SubagentError('identity transition target is not resumable', 'NOT_RESUMABLE', { cause: error });
+            }
+            const source = __addDisposableResource(env_1, observation, false);
+            signal.throwIfAborted();
+            this.authorizeLineage(parent, childId, source.header.parentSession);
+            if (!persistedInboxIsEmpty(source)) {
+                throw new SubagentError('identity transition requires empty persisted inbox and a closed turn', 'IDENTITY_TRANSITION_UNSAFE');
+            }
+            const ownEvents = source.events.slice(source.inheritedEventCount);
+            const descriptor = foldSubagentDescriptor(ownEvents);
+            if (descriptor === undefined || descriptor.mode !== 'continuable') {
+                throw new SubagentError('identity transition requires a persisted local continuable descriptor', 'NOT_RESUMABLE');
+            }
+            const independentlySelected = hasIndependentPresetSelection(ownEvents);
+            const agentPreset = independentlySelected ? source.projections?.values.agentPreset : undefined;
+            if (independentlySelected && typeof agentPreset !== 'string') {
+                throw new SubagentError('identity transition target preset cannot be restored', 'NOT_RESUMABLE');
+            }
+            return await this.materialize({
+                kind: 'local',
+                childId,
+                provider: descriptor.provider,
+                parent,
+                agentOptions: {
+                    ...descriptor.agentProvider !== undefined ? { provider: descriptor.agentProvider } : {},
+                    ...descriptor.agentModel !== undefined ? { model: descriptor.agentModel } : {},
+                    ...descriptor.agentReasoningEffort !== undefined
+                        ? { reasoningEffort: ReasoningEffortId(descriptor.agentReasoningEffort) }
+                        : {},
+                },
+                composition: { agentPreset: agentPreset ?? undefined, persona: descriptor.persona, toolFilter: descriptor.toolFilter },
+                signal,
+            });
+        }
+        catch (e_1) {
+            env_1.error = e_1;
+            env_1.hasError = true;
+        }
+        finally {
+            __disposeResources(env_1);
+        }
+    }
+    /** Validate live identity, exact parentage, quiescence, and managed descendants. */
+    assertIdentityTransitionCandidate(parent, childId, activation, allowUnannounced) {
+        const child = activation.handle.agent;
+        if (this.identityTransitions.owner(childId) !== parent) {
+            throw new SubagentError('identity transition lost its exclusive target fence', 'IDENTITY_TRANSITION_STALE');
+        }
+        if (activation.childId !== childId || child.id !== childId
+            || activation.parent !== parent || child.session.header.parentSession !== parent.id
+            || this.ctx.agents.get(childId) !== child) {
+            throw new SubagentError('identity transition requires the exact live direct child', 'UNAUTHORIZED');
+        }
+        if (activation.closing !== undefined || (!activation.announced && !allowUnannounced)
+            || activation.failureAt !== undefined || child.status !== 'idle'
+            || child.inbox.nextTurn.length !== 0 || child.inbox.nextStep.length !== 0
+            || activation.ownedChildren.size !== 0) {
+            throw new SubagentError('identity transition target is not safely idle and empty', 'IDENTITY_TRANSITION_UNSAFE');
+        }
+        for (const candidate of this.resident.values()) {
+            if (candidate !== activation && candidate.ancestry.has(child)) {
+                throw new SubagentError('identity transition requires a child with no live descendants', 'IDENTITY_TRANSITION_UNSAFE');
+            }
+        }
+        for (const item of this.materializations) {
+            if (item.childId !== childId && item.lineage.includes(child)) {
+                throw new SubagentError('identity transition target has descendant startup or recovery in progress', 'IDENTITY_TRANSITION_UNSAFE');
+            }
+        }
+    }
+    assertRecoveryAvailable(childId) {
+        if (this.identityRecoveryBlocked.has(childId)) {
+            throw new SubagentError('subagent "' + childId + '" identity requires durable recovery before messaging', 'IDENTITY_RECOVERY_REQUIRED');
+        }
+    }
+    throwTransitionError(error) {
+        if (error instanceof IdentityTransitionError)
+            throw new SubagentError(error.message, error.code);
+        throw error;
     }
     /** Activity authority is an exact live object, never just a session id. */
     assertActivityCaller(parent) {
@@ -602,13 +845,15 @@ export class SubagentManager {
             throw new SubagentError('message delivery requires the exact live sender agent', 'UNAUTHORIZED');
         }
         this.assertAdmitting(sender);
+        const senderGeneration = this.captureIdentityGeneration(sender.id);
         const senderActivation = this.resident.get(sender.id);
         if (senderActivation !== undefined
             && senderActivation.kind === 'local'
             && senderActivation.handle.agent === sender
             && senderActivation.parent.id === targetId) {
+            const targetGeneration = this.captureIdentityGeneration(targetId);
             options.signal.throwIfAborted();
-            return this.sendToParent(senderActivation, sender, content, delivery, options.result === true);
+            return this.sendToParent(senderActivation, sender, content, delivery, options.result === true, senderGeneration, targetGeneration);
         }
         if (options.result === true) {
             throw new SubagentError('task result may only be sent to the exact live direct parent', 'UNAUTHORIZED');
@@ -620,6 +865,7 @@ export class SubagentManager {
             signal: options.signal,
             delivery,
             automatic: true,
+            originIdentity: { id: sender.id, generation: senderGeneration },
         });
     }
     /**
@@ -791,6 +1037,7 @@ export class SubagentManager {
      * @returns the shared close transaction.
      */
     dispose(activation) {
+        this.identityTransitionControllers.get(activation.childId)?.abort(new SubagentError('target activation is closing during identity transition', 'IDENTITY_TRANSITION_STALE'));
         return this.close(activation, () => this.finishDisposal(activation, true));
     }
     /** Close admission synchronously and share one release, including startup rollback. */
@@ -1107,6 +1354,8 @@ export class SubagentManager {
     settlementState(activation, observation) {
         if (activation.closing !== undefined)
             return 'closed';
+        if (this.identityTransitions.has(activation.childId))
+            return 'wait';
         if (activation.poke !== observation)
             return 'retry';
         const inbox = activation.handle.agent.inbox;
@@ -1246,12 +1495,20 @@ export class SubagentManager {
     }
     /** Route one parent-originated delivery through residency and cold resume. */
     async deliverToChild(parent, childId, content, options) {
+        const identityGeneration = this.captureIdentityGeneration(childId);
+        const originIdentity = options.originIdentity;
+        if (originIdentity !== undefined)
+            this.assertIdentityGeneration(originIdentity.id, originIdentity.generation);
+        const sourceIdentity = options.source?.kind === 'agent-message'
+            ? { id: options.source.senderSessionId, generation: this.captureIdentityGeneration(options.source.senderSessionId) }
+            : undefined;
+        const admittedOptions = { ...options, identityGeneration, ...(sourceIdentity === undefined ? {} : { sourceIdentity }) };
         this.assertAdmitting(parent);
         this.assertActivityCaller(parent);
         const releaseHold = this.holdOwnership(parent, childId);
         const preparation = this.beginChildPreparation(parent, childId, options.signal);
         try {
-            return await this.deliverFollowup(parent, childId, content, { ...options, signal: preparation.signal });
+            return await this.deliverFollowup(parent, childId, content, { ...admittedOptions, signal: preparation.signal });
         }
         catch (error) {
             releaseHold();
@@ -1261,10 +1518,23 @@ export class SubagentManager {
             preparation.finish();
         }
     }
+    /** Revalidate every identity that contributed to this route after asynchronous work. */
+    assertDeliveryIdentity(childId, options) {
+        if (options.identityGeneration !== undefined)
+            this.assertIdentityGeneration(childId, options.identityGeneration);
+        if (options.originIdentity !== undefined) {
+            this.assertIdentityGeneration(options.originIdentity.id, options.originIdentity.generation);
+        }
+        if (options.sourceIdentity !== undefined) {
+            this.assertIdentityGeneration(options.sourceIdentity.id, options.sourceIdentity.generation);
+        }
+    }
     /** The delivery loop behind {@link deliverToChild}, run under the parent hold. */
     async deliverFollowup(parent, childId, content, options) {
         while (true) {
+            this.assertDeliveryIdentity(childId, options);
             const live = await this.locks.run(childId, async () => {
+                this.assertDeliveryIdentity(childId, options);
                 const activation = this.resident.get(childId);
                 if (activation === undefined)
                     return this.coldResume(parent, childId, content, options);
@@ -1295,7 +1565,7 @@ export class SubagentManager {
         }
     }
     /** Deliver one resident continuable child's message to its live direct parent. */
-    sendToParent(activation, sender, content, delivery, result) {
+    sendToParent(activation, sender, content, delivery, result, senderGeneration, targetGeneration) {
         /* v8 ignore next 6 -- only synchronous re-entrant teardown can open this
          * transaction between exact-agent authorization and this no-await span. */
         if (activation.closing !== undefined) {
@@ -1308,6 +1578,8 @@ export class SubagentManager {
         const reservation = result ? undefined : this.host.reserveAutomatic?.(sender, parent.id);
         try {
             const message = createAgentMessage(sender, content);
+            this.assertIdentityGeneration(sender.id, senderGeneration);
+            this.assertIdentityGeneration(parent.id, targetGeneration);
             this.sendAgentMessage(parent, message, delivery);
             reservation?.commit();
             return message.id;
@@ -1331,7 +1603,7 @@ export class SubagentManager {
      * supplies every reconstruction input; no subagent provider is dispatched.
      */
     async coldResume(parent, childId, content, options) {
-        const env_1 = { stack: [], error: void 0, hasError: false };
+        const env_2 = { stack: [], error: void 0, hasError: false };
         try {
             const query = this.requireSessionQuery();
             let observation;
@@ -1344,7 +1616,8 @@ export class SubagentManager {
                 options.signal.throwIfAborted();
                 throw new SubagentError(`subagent "${childId}" is unavailable`, 'NOT_RESUMABLE', { cause: error });
             }
-            const source = __addDisposableResource(env_1, observation, false);
+            const source = __addDisposableResource(env_2, observation, false);
+            this.assertDeliveryIdentity(childId, options);
             this.assertAdmitting(parent);
             this.authorizeLineage(parent, childId, source.header.parentSession);
             const ownEvents = source.events.slice(source.inheritedEventCount);
@@ -1382,14 +1655,15 @@ export class SubagentManager {
                     throw error;
                 throw new SubagentError(`subagent "${childId}" is unavailable`, 'NOT_RESUMABLE', { cause: error });
             }
+            this.assertDeliveryIdentity(childId, options);
             return await this.submitMaterialized(activation, content, options, parent);
         }
-        catch (e_1) {
-            env_1.error = e_1;
-            env_1.hasError = true;
+        catch (e_2) {
+            env_2.error = e_2;
+            env_2.hasError = true;
         }
         finally {
-            __disposeResources(env_1);
+            __disposeResources(env_2);
         }
     }
     /** Admit a materialized child, commit its creation fact, and release it on failure. */
@@ -1422,6 +1696,7 @@ export class SubagentManager {
             ? createAgentMessage(parent, content)
             : createUserMessage({ content, source: options.source });
         options.signal.throwIfAborted();
+        this.assertDeliveryIdentity(activation.childId, options);
         this.assertAdmitting(parent);
         this.authorizeLineage(parent, activation.childId, activation.parent.id);
         this.assertChildMessagePolicy(parent, options, requireLocalActivation(activation).handle.agent.status !== 'idle');
@@ -1430,6 +1705,7 @@ export class SubagentManager {
             ? this.host.reserveAutomatic?.(parent, activation.childId)
             : undefined;
         try {
+            this.assertDeliveryIdentity(activation.childId, options);
             this.deliver(activation, message, options.delivery);
             reservation?.commit();
         }

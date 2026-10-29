@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -54,8 +55,10 @@ test('official bundleRoster discovers the active bare root and excludes disabled
       },
       load(url, context, nextLoad) {
         if (!url.startsWith('file:') || !url.endsWith('.ts')) return nextLoad(url, context)
-        const result = nextLoad(url, context)
-        return { format: 'module', shortCircuit: true, source: ts.transpileModule(String(result.source), {
+        // Read raw TS before Node's default loader can strip it. External temp
+        // directories have no package type and parameter properties are not erasable.
+        const source = readFileSync(fileURLToPath(url), 'utf8')
+        return { format: 'module', shortCircuit: true, source: ts.transpileModule(source, {
           fileName: fileURLToPath(url), compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
         }).outputText }
       },

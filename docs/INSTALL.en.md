@@ -1,6 +1,6 @@
 # Installation and Usage Guide
 
-Trial build. Starting with **0.3.1**, **one package** supports the DSH 0.2.1 (from rc.1) and 0.2.2 series, including prereleases; the package declares `>=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-0 <0.2.3-0`. Versions 0.3.0 and earlier support only the 0.2.1 series. The plugin requires Node `>=22.19.0`; when using DSH 0.2.2, you must also meet the host requirement of Node `>=24.9.0`. The plugin floor does not lower the host requirement. Locked CI versions provide reproducible regression checks, not a ceiling on series support; see [Testing](../TESTING.md) for the distinction between test coverage and real-Host acceptance.
+Starting with **0.3.1**, **one package** supports the DSH 0.2.1 (from rc.1) and 0.2.2 series, including prereleases; the package declares `>=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-0 <0.2.3-0`. Versions 0.3.0 and earlier support only the 0.2.1 series. The plugin requires Node `>=22.19.0`; when using DSH 0.2.2, you must also meet the host requirement of Node `>=24.9.0`. The plugin floor does not lower the host requirement. Locked CI versions provide reproducible regression checks, not a ceiling on series support; see [Testing](../TESTING.md) for the distinction between test coverage and real-Host acceptance.
 
 ## 1. Installation & Activation
 

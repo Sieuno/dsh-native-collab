@@ -141,6 +141,10 @@ test('release waits for shared gates and preserves read-only checkout credential
   assert.equal(workflow.jobs.checks.uses, './.github/workflows/checks.yml')
   assert.equal(workflow.jobs.checks.permissions.contents, 'read')
   assert.equal(workflow.jobs.release.needs, 'checks')
+  const publish = workflow.jobs.release.steps.find(step => step.name === '发布 GitHub Release（仅 TGZ）').run
+  assert.match(publish, /gh release create/)
+  assert.doesNotMatch(publish, /--prerelease(?:\s|=|$)/)
+  assert.doesNotMatch(JSON.stringify(workflow), /npm publish/)
   const checkout = workflow.jobs.release.steps.find(step => step.uses === 'actions/checkout@v4')
   assert.equal(checkout.with['persist-credentials'], false)
   const checks = parse(await readFile(join(root, '.github/workflows/checks.yml'), 'utf8'))
@@ -178,6 +182,7 @@ test('release notes select only the exact version section and reject prefix coll
     const notes = render('0.3.0', '## 0.3.0-rc.1\nwrong prerelease\n## ' + heading + '\nwanted\n## 0.2.0\nolder')
     assert.match(notes, /wanted/)
     assert.doesNotMatch(notes, /wrong prerelease|older/)
+    assert.ok(notes.includes("dsh plugin --profile <profile> add ./sieuno-dsh-native-collab-0.3.0.tgz"))
   }
   for (const heading of ['0.3.0-rc.1', '0.3.01', '0.3.0+build.1', '0x3x0']) {
     assert.throws(() => render('0.3.0', '## ' + heading + '\nwrong'), /Missing changelog section: 0.3.0/)

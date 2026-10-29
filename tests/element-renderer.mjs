@@ -21,6 +21,8 @@ export function elementRenderer() {
    instance.effects.push(()=>{previous?.cleanup?.();const cleanup=callback();instance.hooks[index]={deps,cleanup}})
   },
  }
+ React.useLayoutEffect = React.useEffect // No layout: run the effect only.
+ React.useMemo = callback => callback()
  return { React,
   draw(Component,props) {
    active=Component;cursor=0

@@ -175,7 +175,7 @@ test('fixture-shaped mount forwards status without a remote diagnosis', async ()
     settings: { describe() { return { ok: true, value: {} } }, mutate() { return { ok: true, value: true } } },
     async $mount(contribution) {
       assert.deepEqual(Array.from(contribution.services, item => item.namespace), ['collabUi'])
-      assert.deepEqual(Array.from(contribution.descriptors, item => item.method), ['status'])
+      assert.deepEqual(Array.from(contribution.descriptors, item => item.method), ['status', 'membershipCandidates', 'exchangeMembership'])
       remote.collabUi = {
         async status() { return { ok: true, value: { rows: [] } } },
       }

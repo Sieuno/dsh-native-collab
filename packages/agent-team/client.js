@@ -2,7 +2,9 @@ window.__ModuleLoader__.load({
   id: '@sieuno/dsh-native-collab',
   factory(require) {
     const React = require('react')
-    const { Button, Modal } = require('@deepseek-ai/dsh-client-ui-primitives')
+    const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
+    const { Button, Modal } = primitives
+    const ReactDOM = require('react-dom')
     const h = React.createElement
     const PACKAGE = '@sieuno/dsh-native-collab'
     const LOCALE = 'collabUi'
@@ -128,6 +130,53 @@ window.__ModuleLoader__.load({
     function strictCodec(typeSymbol, schema) {
       return { mode: 'strict', typeSymbol, create: schema, decode: value => schema().parse(value) }
     }
+    const EXCHANGE_REASONS = ['busy', 'transition-in-progress', 'unfinished-tasks', 'invalid-request', 'unavailable', 'not-found', 'inconsistent-state', 'rejected']
+    function membershipObject(value, required, optional = []) {
+      if (!isPlainObject(value)) strictFailure('membership value must be an object')
+      exactKeys(value, required, optional)
+      return value
+    }
+    function membershipString(value, limit = 128) {
+      if (typeof value !== 'string' || value.length < 1 || value.length > limit || value.trim() !== value) strictFailure('invalid membership identity')
+      return value
+    }
+    function membershipReason(value) {
+      if (value !== null && !EXCHANGE_REASONS.includes(value)) strictFailure('invalid membership reason')
+      return value
+    }
+    function parseExchangeRequest(value) {
+      membershipObject(value, ['rootId', 'targetId', 'operationId', 'to'], ['name', 'description'])
+      for (const key of ['rootId', 'targetId', 'operationId']) membershipString(value[key])
+      if (!['teammate', 'subagent'].includes(value.to)) strictFailure('invalid membership direction')
+      for (const [key, limit] of [['name', 128], ['description', 1024]]) {
+        if (Object.hasOwn(value, key) && (typeof value[key] !== 'string' || value[key].length > limit)) strictFailure('invalid membership text')
+      }
+      return { ...value }
+    }
+    function parseExchangeCandidates(value) {
+      if (!Array.isArray(value)) strictFailure('membership candidates must be an array')
+      return value.map(row => {
+        membershipObject(row, ['rootId', 'targetId', 'role', 'name', 'label', 'status', 'reason', 'recovery'])
+        membershipString(row.rootId); membershipString(row.targetId)
+        if (!['teammate', 'subagent'].includes(row.role) || !['running', 'inactive', 'unknown'].includes(row.status)) strictFailure('invalid membership candidate state')
+        if (typeof row.name !== 'string' || typeof row.label !== 'string') strictFailure('invalid membership label')
+        membershipReason(row.reason)
+        if (row.recovery !== null) {
+          parseExchangeRequest(row.recovery)
+          if (row.recovery.rootId !== row.rootId || row.recovery.targetId !== row.targetId) strictFailure('recovery target mismatch')
+        }
+        return { ...row }
+      })
+    }
+    function parseExchangeResult(value) {
+      membershipObject(value, ['rootId', 'targetId', 'operationId', 'to', 'status', 'reason', 'notification'])
+      parseExchangeRequest({ rootId: value.rootId, targetId: value.targetId, operationId: value.operationId, to: value.to })
+      if (!['converted', 'unchanged', 'rejected', 'recovery-required'].includes(value.status)) strictFailure('invalid membership result state')
+      if (!['delivered', 'failed', 'unchanged'].includes(value.notification)) strictFailure('invalid membership notification state')
+      membershipReason(value.reason)
+      return { ...value }
+    }
+    const membershipSchema = parse => () => ({ parse })
     const REMOTE = {
       package: PACKAGE,
       services: [{ namespace: 'collabUi' }],
@@ -135,6 +184,15 @@ window.__ModuleLoader__.load({
         {
           id: `${PACKAGE}#collabUi/status`, service: 'collabUi', namespace: 'collabUi', method: 'status',
           invocation: { kind: 'direct' }, parameters: [], result: strictCodec(STATUS_TYPE, statusSchema),
+        },
+        {
+          id: PACKAGE + '#collabUi/membershipCandidates', service: 'collabUi', namespace: 'collabUi', method: 'membershipCandidates',
+          invocation: { kind: 'direct' }, parameters: [], result: strictCodec(PACKAGE + '/membership-ui#MembershipExchangeCandidate[]', membershipSchema(parseExchangeCandidates)),
+        },
+        {
+          id: PACKAGE + '#collabUi/exchangeMembership', service: 'collabUi', namespace: 'collabUi', method: 'exchangeMembership',
+          invocation: { kind: 'direct' }, parameters: [{ name: 'request', wire: 'request', source: 'json', codec: strictCodec(PACKAGE + '/membership-ui#MembershipExchangeRequest', membershipSchema(parseExchangeRequest)) }],
+          result: strictCodec(PACKAGE + '/membership-ui#MembershipExchangeResult', membershipSchema(parseExchangeResult)),
         },
       ],
     }
@@ -497,6 +555,96 @@ window.__ModuleLoader__.load({
         ]) : null,
       ])
     }
+    function useMembershipConversion(api) {
+      const [state, setState] = React.useState({ pending: false, result: null, error: false, retry: null })
+      const busy = React.useRef(false), alive = React.useRef(true)
+      React.useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
+      const convert = async (row, name, retryRequest = null) => {
+        if (busy.current || row.status !== 'inactive' || (row.reason !== null && row.recovery === null)) return null
+        const request = retryRequest ?? row.recovery ?? {
+          rootId: row.rootId, targetId: row.targetId, to: row.role === 'teammate' ? 'subagent' : 'teammate',
+          operationId: 'membership-' + (globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)),
+          ...(row.role === 'subagent' ? { name: name.trim() } : {}),
+        }
+        busy.current = true
+        setState(previous => ({ ...previous, pending: true, result: null, error: false }))
+        try {
+          const result = await api.convert(request)
+          if (alive.current) setState({ pending: false, result, error: false, retry: result.status === 'recovery-required' ? request : null })
+          return result
+        } catch {
+          if (alive.current) setState({ pending: false, result: null, error: true, retry: request })
+          return null
+        } finally { busy.current = false }
+      }
+      return { state, busy, convert }
+    }
+    function membershipFeedback(t, state) {
+      if (state.error) return t('exchange.error')
+      if (!state.result) return ''
+      return t('exchange.result.' + state.result.status)
+        + (state.result.reason ? ' ' + t('exchange.reason.' + state.result.reason) : '')
+        + (state.result.notification === 'failed' ? ' ' + t('exchange.notificationFailed') : '')
+    }
+    function MembershipJoinDialog({ row, api, t, onClose }) {
+      const [name, setName] = React.useState(row.recovery?.name ?? row.name)
+      const { state, busy, convert } = useMembershipConversion(api)
+      const close = () => { if (!busy.current) onClose() }
+      const submit = async event => {
+        event?.preventDefault()
+        if (!name.trim()) return
+        const result = await convert(row, name, state.retry)
+        if ((result?.status === 'converted' || result?.status === 'unchanged') && result.notification !== 'failed') onClose()
+      }
+      const feedback = membershipFeedback(t, state)
+      return h(Modal, { open: true, title: t('exchange.join'), closeLabel: t('modalCancel'), onClose: close,
+        footer: [h(Button, { key: 'cancel', disabled: state.pending, onClick: close }, t('modalCancel')),
+          h(Button, { key: 'confirm', disabled: state.pending || !name.trim(), onClick: () => { void submit() } },
+            t(state.retry || row.recovery ? 'exchange.retry' : 'exchange.join'))] },
+        h('form', { onSubmit: submit, 'data-testid': 'membership-join-form' }, [
+          h('label', { key: 'name', style: { display: 'flex', flexDirection: 'column', gap: 8 } }, [t('exchange.name'),
+            h('input', { value: name, maxLength: 128, 'data-modal-autofocus': true, disabled: state.pending || state.retry !== null || row.recovery !== null,
+              onChange: event => setName(event.target.value) })]),
+          feedback ? h('p', { key: 'feedback', role: state.error || state.result?.status === 'rejected' ? 'alert' : 'status' }, feedback) : null,
+        ]))
+    }
+    function MembershipRowAction({ t, api, rootId, targetId, expectedRole }) {
+      const [candidate, setCandidate] = React.useState({ loading: true, row: null, error: false })
+      const { state, busy, convert } = useMembershipConversion(api)
+      React.useEffect(() => {
+        let cancelled = false, timer
+        const refresh = async () => {
+          if (!busy.current) try {
+            const rows = await api.candidates()
+            const row = rows.find(item => item.rootId === rootId && item.targetId === targetId && item.role === expectedRole) ?? null
+            if (!cancelled) setCandidate({ loading: false, row, error: false })
+          } catch { if (!cancelled) setCandidate(previous => ({ ...previous, loading: false, error: true })) }
+          if (!cancelled) timer = setTimeout(refresh, 3000)
+        }
+        void refresh()
+        return () => { cancelled = true; clearTimeout(timer) }
+      }, [api, rootId, targetId, expectedRole])
+      const row = candidate.row
+      if (!candidate.loading && !candidate.error && !row && !state.retry) return null
+      const feedback = membershipFeedback(t, state)
+      const reason = candidate.error ? t('exchange.reason.unavailable') : row?.reason ? t('exchange.reason.' + row.reason) : ''
+      const retry = state.retry ?? row?.recovery
+      return h('div', { 'data-testid': 'membership-row-action', 'aria-busy': state.pending,
+        onClick: event => event.stopPropagation(), onKeyDown: event => event.stopPropagation() }, [
+        h(Button, { key: 'convert', title: feedback || reason || undefined,
+          disabled: candidate.loading || candidate.error || state.pending || !row || row.status !== 'inactive' || (row.reason !== null && row.recovery === null),
+          onClick: () => {
+            if (!row) return
+            if (row.role === 'subagent') api.openJoin(row)
+            else void convert(row, row.name, retry)
+          } }, t(retry ? 'exchange.retry' : expectedRole === 'teammate' ? 'exchange.leave' : 'exchange.join')),
+        feedback && (state.error || state.result?.status === 'rejected' || state.result?.status === 'recovery-required' || state.result?.notification === 'failed')
+          ? h('span', { key: 'feedback', role: 'alert' }, feedback) : null,
+      ])
+    }
+    // Build-time private copies extend the exact native header entries, not the DOM.
+    const CONVERSATION_PANELS = null
+    const CONVERSATION_CSS = null
     function BundleConfig(props) {
       if (props.view === 'summary') return props.t('settingsSummary')
       if (props.view !== 'page') return null
@@ -617,6 +765,15 @@ window.__ModuleLoader__.load({
             if (mountError) return Promise.reject(mountError)
             try { return unwrap(namespace().status()) } catch (error) { return Promise.reject(error) }
           }
+          const membershipCall = (method, args) => {
+            if (mountError) return Promise.reject(mountError)
+            try { return unwrap(namespace()[method](...args)) } catch (error) { return Promise.reject(error) }
+          }
+          let candidatesInFlight = null
+          const membership = {
+            candidates: () => candidatesInFlight ?? (candidatesInFlight = membershipCall('membershipCandidates', []).finally(() => { candidatesInFlight = null })),
+            convert: request => membershipCall('exchangeMembership', [parseExchangeRequest(request)]),
+          }
           const callSettings = (method, args) => {
             const resolved = resolveRemote('remote.settings', isSettings)
             if (!resolved.service) return Promise.reject(resolved.error)
@@ -628,6 +785,38 @@ window.__ModuleLoader__.load({
           register('plugins.detail.badge', { id: 'collab-ui-status', order: 50 }, DetailBadge)
           register('plugins.detail.section', { id: 'collab-ui-status', order: 50 }, DetailSection)
           register('plugins.row.config', { key: CONTROL_SLOT_KEY, inject: () => ({ readStatus: status, settings }) }, EnhancementPage)
+          const service = name => {
+            const value = ctx.get(name)
+            if (!value) throw new Error('Conversation service unavailable: ' + name)
+            return value
+          }
+          const membershipProps = () => ({ membership, membershipT: ctx.locale.bind(LOCALE) })
+          const panel = Component => props => {
+            const [joining, setJoining] = React.useState(null)
+            const rowApi = React.useMemo(() => ({ ...props.membership, openJoin: row => setJoining(row) }), [props.membership])
+            React.useEffect(() => { setJoining(null) }, [props.sessionId])
+            return h(React.Fragment, null, [
+              h('style', { key: 'conversation-css' }, CONVERSATION_CSS), h(Component, { key: 'panel', ...props, membership: rowApi }),
+              joining ? h(MembershipJoinDialog, { key: joining.targetId, row: joining, api: rowApi, t: props.membershipT, onClose: () => setJoining(null) }) : null,
+            ])
+          }
+          register('conversation.session.header.actions', {
+            id: 'agent-team', priority: -10, order: -20, locale: 'agent-team',
+            inject: () => ({ ...membershipProps(), openTeammate(sessionId, childSessionId) {
+              const sessions = service('sessions')
+              const parentSessionId = sessions.binding(sessionId)?.session.getSnapshot().subagent?.address?.parentSessionId ?? sessionId
+              if ((sessions.retainInfo(sessionId).getSnapshot().retainedBy.mainView ?? 0) === 0) return
+              service('uiWorkspace').openSession(childSessionId === parentSessionId ? parentSessionId : { parentSessionId, childSessionId, mode: 'continuable' })
+            } }),
+          }, panel(CONVERSATION_PANELS.TeamAction))
+          register('conversation.session.header.actions', {
+            id: 'subagent-catalog', priority: -10, order: 10, locale: 'subagent',
+            inject: () => ({ ...membershipProps(),
+              openChild: address => service('uiWorkspace').openSession(address),
+              openChildAside: address => service('sidebarRight').openResource('dsh-resource://subagentchat/session/' + encodeURIComponent(address.childSessionId) + '?' + new URLSearchParams({ parent: address.parentSessionId, mode: address.mode }), { kind: 'subagentchat', preferNewPane: true }),
+              refreshProjection: parentSessionId => { void service('sessions').refreshProjections(parentSessionId) },
+            }),
+          }, panel(CONVERSATION_PANELS.SubagentCatalogAction))
           return release
         } catch (error) {
           await release()

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
 import { ASSEMBLY_ROLES } from '../dist/agent-team/assembly-layout.js'
+import { buildConversationPanels } from '../scripts/client-panels.mjs'
+import { fileURLToPath } from 'node:url'
 
 /** Mirror the build's two data injections when testing the source client. */
 export async function clientSource({ emitted = false } = {}) {
@@ -11,15 +13,18 @@ export async function clientSource({ emitted = false } = {}) {
   const locales = Object.fromEntries(await Promise.all(['en', 'zh'].map(async lang => [lang,
     JSON.parse(await readFile(new URL(`../locale/${lang}.json`, import.meta.url), 'utf8')).collabUi,
   ])))
-  return source.replace('const UI_LOCALES = null', `const UI_LOCALES = ${JSON.stringify(locales)}`)
+  const panels = await buildConversationPanels(fileURLToPath(new URL('..', import.meta.url)))
+  return source.replace('const CONVERSATION_PANELS = null', () => 'const CONVERSATION_PANELS = ' + panels.code)
+    .replace('const CONVERSATION_CSS = null', () => 'const CONVERSATION_CSS = ' + JSON.stringify(panels.css))
+    .replace('const UI_LOCALES = null', `const UI_LOCALES = ${JSON.stringify(locales)}`)
     .replace('const ASSEMBLY_LAYOUT = null', `const ASSEMBLY_LAYOUT = ${JSON.stringify(ASSEMBLY_ROLES)}`)
 }
 
 export async function clientModule(globals = {}, options = {}) {
   let spec
   runInNewContext(await clientSource(options), {
-    setTimeout, clearTimeout, document: { activeElement: null }, ...globals,
-    window: { __ModuleLoader__: { load(value) { spec = value } } },
+    setTimeout, clearTimeout, URLSearchParams, document: { activeElement: null, body: {}, addEventListener() {}, removeEventListener() {} }, ...globals,
+    window: { innerWidth: 1280, innerHeight: 800, addEventListener() {}, removeEventListener() {}, __ModuleLoader__: { load(value) { spec = value } } },
   })
   return spec
 }
@@ -40,9 +45,12 @@ export function text(node) {
   if (typeof node === 'string' || typeof node === 'number') return String(node)
   return node && typeof node === 'object' ? text(node.children) + text(node.props?.children) + text(node.props?.footer) : ''
 }
-export const primitives = { Button: 'button', Modal: 'test-host-modal' }
+export const primitives = { Button: 'button', Modal: 'test-host-modal',
+  useAnchoredPosition: () => ({ top: 0, left: 0 }), useDismissOnOutsidePointer() {},
+}
 export const clientRequire = React => name => {
   if (name === 'react') return React
+  if (name === 'react-dom') return { createPortal: (node, target) => node }
   if (name === '@deepseek-ai/dsh-client-ui-primitives') return primitives
   throw new Error(`Unexpected browser module ${name}`)
 }
@@ -50,9 +58,9 @@ export function clientContext(context) {
   const remote = context.remote
   remote.$mount = async contribution => {
     assert.deepEqual(Array.from(contribution.services, item => item.namespace), ['collabUi'])
-    assert.deepEqual(Array.from(contribution.descriptors, item => item.method), ['status'])
+    assert.deepEqual(Array.from(contribution.descriptors, item => item.method), ['status', 'membershipCandidates', 'exchangeMembership'])
     const original = remote.collabUi
-    remote.collabUi = Object.fromEntries(['status'].map(method => [method,
+    remote.collabUi = Object.fromEntries(['status', 'membershipCandidates', 'exchangeMembership'].map(method => [method,
       async (...args) => ({ ok: true, value: await original[method](...args) }),
     ]))
     return () => { remote.collabUi = original }
@@ -69,6 +77,7 @@ export function clientContext(context) {
     // asserted against the source dictionaries in locale-coverage.test.mjs.
     return () => {}
   } }
+  context.locale.bind ??= namespace => key => namespace + '.' + key
   return context
 }
 export function schemaFields(dict) {

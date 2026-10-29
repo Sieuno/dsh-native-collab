@@ -4,6 +4,7 @@ import { dirname, join, relative } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { checkHostImportContract } from './host-import-contract.mjs'
+import { buildConversationPanels } from './client-panels.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const args = process.argv.slice(2)
@@ -121,6 +122,12 @@ for (const [name, value] of [['UI_LOCALES', dictionaries], ['ASSEMBLY_LAYOUT', l
   const placeholder = `const ${name} = null`
   if (browserSource.split(placeholder).length !== 2) throw new Error(`Expected one ${name} browser placeholder`)
   browserSource = browserSource.replace(placeholder, `const ${name} = ${JSON.stringify(value)}`)
+}
+const panels = await buildConversationPanels(root)
+for (const [name, code] of [['CONVERSATION_PANELS', panels.code], ['CONVERSATION_CSS', JSON.stringify(panels.css)]]) {
+  const placeholder = `const ${name} = null`
+  if (browserSource.split(placeholder).length !== 2) throw new Error(`Expected one ${name} browser placeholder`)
+  browserSource = browserSource.replace(placeholder, () => `const ${name} = ${code}`)
 }
 await emit(clientOutput, browserSource)
 if (checking) {

@@ -147,6 +147,7 @@ for (const language of ['en', 'zh']) {
       assert.equal(visit(bundle, node => node.props?.key === 'order' || node.type === 'ol').length, 0)
       assert.deepEqual(f.registrations.map(item => item.contract.name), [
         'plugins.bundle.config', 'plugins.detail.badge', 'plugins.detail.section', 'plugins.row.config',
+        'conversation.session.header.actions', 'conversation.session.header.actions',
       ])
       assert.equal(f.registrations[3].contract.key, '@sieuno/dsh-native-collab#dsh-native-collab-ui')
       const badge = f.registrations.find(item => item.contract.name === 'plugins.detail.badge').Component

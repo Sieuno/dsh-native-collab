@@ -7,6 +7,19 @@ permissions:
   contents: read
 
 jobs:
+  targets:
+    name: Reviewed compatibility targets
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - id: targets
+        run: node scripts/ci/compatibility-targets.mjs --github-output >> "$GITHUB_OUTPUT"
+
   source-contracts:
     uses: ./.github/workflows/source-contracts.yml
 
@@ -44,17 +57,13 @@ jobs:
         run: git diff --exit-code
 
   sdk:
+    needs: targets
     name: SDK / ${{ matrix.target }} / Node ${{ matrix.node }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - target: rc2
-            node: '22.19.0'
-          - target: alpha2
-            node: '24.19.0'
+      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
     env:
       DSH_SDK_ENVIRONMENT: sdk-only
     steps:
@@ -65,8 +74,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            .github/sdk/package-lock.json
-            .github/sdk/alpha2/package-lock.json
+            ${{ matrix.sdkDirectory }}/package-lock.json
       - run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
       - name: Prepare locked, executable SDK
         run: node scripts/ci/prepare-sdk.mjs --target ${{ matrix.target }}

@@ -10,7 +10,7 @@
 
 - 连续自动唤醒上限说明改为“由会话所有 Agent 共享”，同步中英设置提示与文档，避免误读为仅适用于 Team；计数逻辑不变。
 
-- 版本提升为 0.3.1，通过 GitHub Release 提供 TGZ 安装包，本次不发布到 npm；补齐打包内校验器所需的 CONTRIBUTING 文档，并将其纳入发布契约。
+- 版本提升为 0.3.1；补齐打包内校验器所需的 CONTRIBUTING 文档，并将其纳入发布契约。
 
 - 单包支持 DSH 0.2.1（自 rc.1 起）及 0.2.2 系列，含预发布版；宿主版本声明与 DSH 可选 peer 同步，CI 继续使用锁定版本作回归样本，不复制宿主单例。Cordis / Schemastery 可选 peer 保留独立声明。
 - 投影兼容边界统一处理原有 disposer 与 handle promise 的释放，保留 callable-thenable 的旧生命周期；未知类型的 key 读取通过原投影 schema 校验，显式补全两代 SDK 共用的投影类型参数。

@@ -182,7 +182,7 @@ test('release notes select only the exact version section and reject prefix coll
     const notes = render('0.3.0', '## 0.3.0-rc.1\nwrong prerelease\n## ' + heading + '\nwanted\n## 0.2.0\nolder')
     assert.match(notes, /wanted/)
     assert.doesNotMatch(notes, /wrong prerelease|older/)
-    assert.ok(notes.includes("dsh plugin --profile <profile> add ./sieuno-dsh-native-collab-0.3.0.tgz"))
+    assert.ok(notes.includes("dsh plugin --profile web add @sieuno/dsh-native-collab"))
   }
   for (const heading of ['0.3.0-rc.1', '0.3.01', '0.3.0+build.1', '0x3x0']) {
     assert.throws(() => render('0.3.0', '## ' + heading + '\nwrong'), /Missing changelog section: 0.3.0/)

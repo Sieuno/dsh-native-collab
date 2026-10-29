@@ -28,6 +28,7 @@ export function sdkEnvironment() {
   const sdk = packageIdentity('@deepseek-ai/dsh-tools')
   const selected = Object.entries(SDK_TARGETS).find(([, lane]) => lane.version === sdk.version)
   if (!selected) throw new Error('Unsupported SDK version ' + sdk.version)
+  assert.ok(['single', 'batch'].includes(selected[1].execution), 'Unimplemented SDK executor contract')
   if (mode === 'sdk-only') {
     for (const name of ['@deepseek-ai/dsh-settings', '@deepseek-ai/dsh-config-editor', '@deepseek-ai/dsh-app-boot']) {
       assert.throws(() => require.resolve(name), { code: 'MODULE_NOT_FOUND' }, name + ' must remain unavailable in sdk-only mode')
@@ -43,7 +44,7 @@ export function sdkEnvironment() {
 
 export async function mountToolExecutor(ctx, fibers) {
   const environment = sdkEnvironment()
-  if (environment.line === 'alpha2') {
+  if (environment.execution === 'batch') {
     const executorModule = await import('@deepseek-ai/dsh-tool-executor-native')
     fibers.push(await ctx.plugin(executorModule.default ?? executorModule))
   }
@@ -52,7 +53,7 @@ export async function mountToolExecutor(ctx, fibers) {
 
 export async function executeToolCall(ctx, input) {
   const environment = sdkEnvironment()
-  if (environment.line === 'rc2') return ctx.tools.execute(input)
+  if (environment.execution === 'single') return ctx.tools.execute(input)
   const { ToolCallId } = await import('@deepseek-ai/dsh-llm')
   const batch = await ctx.tools.execute({
     calls: [{ type: 'tool-call', id: ToolCallId(String(input.callId)), name: input.name, arguments: JSON.stringify(input.arguments) }],

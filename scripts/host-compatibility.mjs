@@ -7,8 +7,14 @@ export const CORDIS_RANGE = '4.0.5 || =4.0.6-alpha.1'
 export const SCHEMASTERY_RANGE = '3.18.5 || =3.18.6-alpha.1'
 
 export const SDK_TARGETS = Object.freeze({
-  rc2: Object.freeze({ version: '0.2.1-rc.2', node: '22.19.0', cordis: '4.0.5', loader: '1.0.6', schemastery: '3.18.5', execution: 'single' }),
-  alpha2: Object.freeze({ version: '0.2.2-alpha.2', node: '24.19.0', cordis: '4.0.6-alpha.1', loader: '1.0.7-alpha.1', schemastery: '3.18.6-alpha.1', execution: 'batch' }),
+  rc2: Object.freeze({
+    version: '0.2.1-rc.2', node: '22.19.0', cordis: '4.0.5', loader: '1.0.6', schemastery: '3.18.5', execution: 'single', sdkDirectory: '.github/sdk',
+    source: Object.freeze({ ref: '687f282e8625c6b8d11ff58211a90524be2e4317', rosterSha256: 'bbbced22b0a0e5ea7053edd51f755995fe49b874a88215d56b808d54f1d730b8' }),
+  }),
+  alpha2: Object.freeze({
+    version: '0.2.2-alpha.2', node: '24.19.0', cordis: '4.0.6-alpha.1', loader: '1.0.7-alpha.1', schemastery: '3.18.6-alpha.1', execution: 'batch', sdkDirectory: '.github/sdk/alpha2',
+    source: Object.freeze({ ref: 'f3803c96974ad4a94195fb97e5c637e9c2a3afe3', rosterSha256: 'da59385c3a2505df33c14a5376c81830a7a7127f7d993eb57f7d63747e580f7a' }),
+  }),
 })
 
 // Independent inventory: dropping a required peer must not make validation pass.

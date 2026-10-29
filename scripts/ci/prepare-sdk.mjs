@@ -14,11 +14,11 @@ let target = 'rc2', install = true
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--no-install') install = false
   else if (args[i] === '--target' && args[i + 1]) target = args[++i]
-  else throw new Error('Usage: node scripts/ci/prepare-sdk.mjs [--target rc2|alpha2] [--no-install]')
+  else throw new Error('Usage: node scripts/ci/prepare-sdk.mjs [--target <reviewed-target>] [--no-install]')
 }
 assert(Object.hasOwn(SDK_TARGETS, target), 'Unknown SDK target: ' + target)
 const lane = SDK_TARGETS[target]
-const sdk = join(root, '.github/sdk', ...(target === 'rc2' ? [] : [target]))
+const sdk = join(root, lane.sdkDirectory)
 const sdkModules = join(sdk, 'node_modules')
 const rootModules = join(root, 'node_modules')
 const forbidden = ['@deepseek-ai/dsh-settings', '@deepseek-ai/dsh-config-editor', '@deepseek-ai/dsh-app-boot']
@@ -38,7 +38,7 @@ for (const [name, version] of Object.entries(manifest.dependencies)) {
 for (const [name, version] of Object.entries({ '@deepseek-ai/cordis': lane.cordis, '@deepseek-ai/cordis-plugin-loader': lane.loader, '@deepseek-ai/schemastery': lane.schemastery })) {
   assert.equal(manifest.dependencies[name], version, 'Incorrect singleton/loader version: ' + name)
 }
-if (target === 'alpha2') assert.equal(manifest.dependencies['@deepseek-ai/dsh-tool-executor-native'], lane.version)
+if (lane.execution === 'batch') assert.equal(manifest.dependencies['@deepseek-ai/dsh-tool-executor-native'], lane.version)
 
 if (install) {
   const npmArgs = ['ci', '--prefix', sdk, '--cache', join(sdk, '.npm-cache'), '--ignore-scripts', '--legacy-peer-deps', '--no-audit', '--no-fund', '--fetch-timeout=30000', '--fetch-retries=1']

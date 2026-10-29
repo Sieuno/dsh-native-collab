@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { clientRequire, clientContext, clientModule, visit } from './browser-fixture.mjs'
 async function load(React, remote) {
   const spec = await clientModule({}, { emitted: true })
@@ -60,4 +61,17 @@ test('collapsed diagnostics unwrap RemoteResult and expose no obsolete preview a
   assert.deepEqual(actions, [])
   assert.equal(visit(draw(), node => node.props?.['data-testid'] === 'preview-result').length, 0)
   cleanup(); await view.cleanup()
+})
+
+test('localized package detail points to short settings guidance instead of the README fallback', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+  assert.ok(manifest.files.includes('locale/settings.*.md'))
+  assert.ok(manifest.files.includes('packages/agent-team/browser-panels/NOTICE'))
+  for (const language of ['en', 'zh']) {
+    const locale = JSON.parse(await readFile(new URL('../locale/' + language + '.json', import.meta.url), 'utf8'))
+    assert.equal(locale.meta.detail, 'locale/settings.' + language + '.md')
+    const detail = await readFile(new URL('../' + locale.meta.detail, import.meta.url), 'utf8')
+    assert.ok(detail.trim().length > 0 && detail.length < 300)
+    assert.doesNotMatch(detail, /#|README/)
+  }
 })

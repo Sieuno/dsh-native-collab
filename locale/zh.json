@@ -1,5 +1,6 @@
 {
   "meta": {
+    "detail": "locale/settings.zh.md",
     "title": "原生协作插件包",
     "description": "集中管理子 Agent 沟通、Team 模型选择及连续自动唤醒轮数上限。修改自动保存，重启后生效。"
   },

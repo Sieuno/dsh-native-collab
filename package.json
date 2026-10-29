@@ -12,6 +12,7 @@
   "files": [
     "dist/**/*.js",
     "locale/*.json",
+    "locale/settings.*.md",
     "packages/agent-team/browser-panels/NOTICE",
     "packages/agent-team/locale/*.json",
     "packages/agent-team/LICENSE",

@@ -1,5 +1,6 @@
 {
   "meta": {
+    "detail": "locale/settings.en.md",
     "title": "Native Collaboration Bundle",
     "description": "Manage child Agent communication, Team model selection, and the consecutive automatic wake-up limit in one place. Changes save automatically and take effect after restart."
   },

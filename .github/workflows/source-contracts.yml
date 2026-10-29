@@ -34,11 +34,13 @@ jobs:
     env:
       DSH_COMPAT_TARGET: ${{ matrix.target }}
       DSH_SDK_ENVIRONMENT: sdk-only
-      DSH_SOURCE_ROOT: ${{ runner.temp }}/upstream-${{ matrix.target }}
-      DSH_OFFICIAL_SOURCE_ROOT: ${{ runner.temp }}/upstream-${{ matrix.target }}
-      DSH_TEST_ARTIFACTS: ${{ runner.temp }}/source-contract-artifacts
     steps:
       - uses: actions/checkout@v4
+      - name: Set external source fixture paths
+        run: |
+          echo "DSH_SOURCE_ROOT=$RUNNER_TEMP/upstream-$DSH_COMPAT_TARGET" >> "$GITHUB_ENV"
+          echo "DSH_OFFICIAL_SOURCE_ROOT=$RUNNER_TEMP/upstream-$DSH_COMPAT_TARGET" >> "$GITHUB_ENV"
+          echo "DSH_TEST_ARTIFACTS=$RUNNER_TEMP/source-contract-artifacts" >> "$GITHUB_ENV"
       # Fetch only the reviewed commit; never install/build the upstream workspace.
       - name: Checkout matching official source
         env:

@@ -252,3 +252,47 @@ test('read rejects inactive assumptions and never returns fabricated default val
     await assert.rejects(f.adapter.read(), /native-subagent-entry-not-disabled/)
   } finally { await f.close() }
 })
+
+for (const [name, rewrite] of [
+  ['config anchor', text => text.replace('  config:\n', '  config: &shared\n').replace('  config: { keep: true }', '  config: *shared')],
+  ['row anchor', text => text.replace('- id: subagent', '- &shared\n  id: subagent').replace('  config: { keep: true }', '  config: *shared')],
+  ['depth scalar anchor', text => text.replace('maxDepth: 2', 'maxDepth: &shared 2').replace('keep: true', 'keep: *shared')],
+  ['capacity scalar anchor', text => text.replace('maxActiveSubagents: 4', 'maxActiveSubagents: &shared 4').replace('keep: true', 'keep: *shared')],
+  ['nested anchor', text => text.replace('deliverySelection: true', 'deliverySelection: &shared true').replace('keep: true', 'keep: *shared')],
+  ['config alias', text => '- id: template\n  config: { flag: &shared true }\n' + text.replace('deliverySelection: true', 'deliverySelection: *shared')],
+  ['root sequence anchor', text => '&shared\n' + text.replace('  config: { keep: true }', '  config: *shared')],
+]) {
+  test(`native limits with a ${name} are read-only and never change aliased configuration`, async () => {
+    const f = await fixture()
+    try {
+      const original = rewrite(await readFile(f.patchPath, 'utf8'))
+      await writeFile(f.patchPath, original)
+      const config = yaml.parse(original).find(row => row.id === 'subagent').config
+      f.entry.options.config = config
+      f.layer.override = config
+      const before = await f.adapter.read()
+      assert.deepEqual(before.values, { maxDepth: 2, maxActiveSubagents: 4 })
+      assert.equal(before.writable, false)
+      assert.equal(before.error, 'native-subagent-profile-shared-config')
+      await assert.rejects(f.adapter.save({ revision: before.revision, maxDepth: 5, maxActiveSubagents: 11 }), /native-subagent-profile-shared-config/)
+      assert.equal(await readFile(f.patchPath, 'utf8'), original, 'all aliases and source bytes remain unchanged')
+      assert.equal(f.atomic.writes.length, 0)
+      assert.equal(f.entry.options.config, config)
+    } finally { await f.close() }
+  })
+}
+
+test('unrelated YAML anchors remain supported and untouched by native saves', async () => {
+  const f = await fixture()
+  try {
+    const original = (await readFile(f.patchPath, 'utf8')).replace('keep: true', 'keep: &shared true, copy: *shared')
+    await writeFile(f.patchPath, original)
+    const before = await f.adapter.read()
+    assert.equal(before.writable, true)
+    await f.adapter.save({ revision: before.revision, maxDepth: 5, maxActiveSubagents: 11 })
+    const saved = await readFile(f.patchPath, 'utf8')
+    assert.match(saved, /&shared/)
+    assert.match(saved, /\*shared/)
+    assert.deepEqual(yaml.parse(saved).find(row => row.id === 'unrelated').config, { keep: true, copy: true })
+  } finally { await f.close() }
+})

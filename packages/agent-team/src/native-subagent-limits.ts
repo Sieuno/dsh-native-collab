@@ -246,6 +246,20 @@ function yamlTarget(document: PatchDocument): { index: number; config: Node; has
   if (config !== undefined && !isMap(config)) fail('native-subagent-profile-config-not-map')
   return { index, config: config ?? document.createNode({}), hasConfig: config !== undefined }
 }
+function sharedNativeConfig(document: PatchDocument, target: ReturnType<typeof yamlTarget>): boolean {
+  // In-place changes also affect aliases of an ancestor or anchored child.
+  // Conservatively make that native subtree read-only, without rewriting aliases.
+  if (document.contents.anchor) return true
+  if (target === undefined) return false
+  const row = document.contents.items[target.index]
+  if (isMap(row) && row.anchor) return true
+  let shared = false
+  visit(target.config, {
+    Alias() { shared = true },
+    Node(_key, node) { if ('anchor' in node && node.anchor) shared = true },
+  })
+  return shared
+}
 function validateRequest(request: NativeSubagentLimitsRequest): NativeSubagentLimitsValue {
   if (!record(request) || typeof request.revision !== 'string' || request.revision.length === 0) fail('native-subagent-request-invalid')
   return { maxDepth: integer(request.maxDepth, 'maxDepth'), maxActiveSubagents: integer(request.maxActiveSubagents, 'maxActiveSubagents') }
@@ -274,8 +288,8 @@ export class NativeSubagentLimits {
     const target = yamlTarget(document)
     const values = validateLayers(layer, target?.hasConfig ?? false)
     const revision = digest(source, { values, profileHasConfig: target?.hasConfig ?? false, inherited: layer.inherited, override: layer.override, current: entry.options.config })
-    const writable = true
-    return { view: { values, revision, writable }, entry, layer, source, path: patchPath, dir }
+    const writable = !sharedNativeConfig(document, target)
+    return { view: { values, revision, writable, ...(writable ? {} : { error: 'native-subagent-profile-shared-config' }) }, entry, layer, source, path: patchPath, dir }
   }
 
   async read(): Promise<LimitsView> {
@@ -290,6 +304,7 @@ export class NativeSubagentLimits {
     const run = async (): Promise<LimitsView> => this.io.withFileLock(join(profile.dir, 'package.json'), async () => {
       const before = await this.snapshot()
       if (request.revision !== before.view.revision) fail('native-limits-conflict')
+      if (!before.view.writable) fail(before.view.error ?? 'native-subagent-profile-readonly')
       const document = parsePatch(before.source)
       const target = yamlTarget(document)
       const oldConfig = before.entry.options.config

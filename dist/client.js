@@ -305,26 +305,33 @@ window.__ModuleLoader__.load({
     function NativeLimitsPage({ t, readLimits, writeLimits }) {
       const [state, setState] = React.useState({ view: null, depth: '', capacity: '', loading: true, saving: false, pending: false, error: null, saved: false, edit: 0 })
       const alive = React.useRef(true), dirty = React.useRef(new Map()), queue = React.useRef(null), draining = React.useRef(false)
-      const sequence = React.useRef(0), draft = React.useRef({ depth: '', capacity: '' })
+      const sequence = React.useRef(0), draft = React.useRef({ depth: '', capacity: '' }), loadVersion = React.useRef(0)
       const fields = { depth: 'maxDepth', capacity: 'maxActiveSubagents' }
       const integer = (text, minimum) => /^(0|[1-9]\d*)$/.test(text) && Number.isSafeInteger(Number(text)) && Number(text) >= minimum
       const validDraft = () => integer(draft.current.depth, 0) && integer(draft.current.capacity, 1)
       const load = async () => {
         if (dirty.current.size || draining.current) return
+        const version = ++loadVersion.current, editSequence = sequence.current
+        const current = () => alive.current && version === loadVersion.current
+        const pristine = () => sequence.current === editSequence && !dirty.current.size && !draining.current
         setState(old => ({ ...old, loading: true, error: null, saved: false }))
         try {
           const view = limitsViewSchema().parse(await readLimits())
-          if (!alive.current) return
+          if (!current()) return
+          // Focus reads may overlap; only the latest may apply, and never over a draft.
+          if (!pristine()) { setState(old => ({ ...old, loading: false })); return }
           draft.current = { depth: String(view.values.maxDepth), capacity: String(view.values.maxActiveSubagents) }
           setState(old => ({ ...old, ...draft.current, view, loading: false }))
-        } catch { if (alive.current) setState(old => ({ ...old, view: null, loading: false, error: 'unavailable' })) }
+        } catch {
+          if (current()) setState(old => pristine() ? { ...old, view: null, loading: false, error: 'unavailable' } : { ...old, loading: false })
+        }
       }
       React.useEffect(() => {
         alive.current = true
         void load()
         const onFocus = () => { void load() }
         window.addEventListener?.('focus', onFocus)
-        return () => { alive.current = false; queue.current = null; window.removeEventListener?.('focus', onFocus) }
+        return () => { alive.current = false; loadVersion.current++; queue.current = null; window.removeEventListener?.('focus', onFocus) }
       }, [readLimits])
       const drain = async () => {
         if (draining.current) return

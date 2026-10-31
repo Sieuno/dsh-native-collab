@@ -14,7 +14,7 @@ Managed takeover disables the native service entry, so the native page may show 
 
 Defaults are depth 1 and parallelism 8. Depth 0 disables delegation for tools inheriting this setting; an explicit tool depth still takes precedence. Parallelism counts live and starting children across the root Agent’s recursion tree, excluding the root. Changes apply to subsequent admission; lowering capacity does not stop existing children. The automatic wake-up limit is separate.
 
-Saving checks revisions and preserves unrelated configuration. Higher-priority overrides, ambiguous targets, and concurrent changes reject the save. Keep your draft, reload limits, and inspect the override source before retrying. Do not enable native and managed services together to restore the interface.
+Saving checks revisions and preserves unrelated configuration. Higher-priority overrides, ambiguous targets, and concurrent changes reject the save. Keep your draft, reload limits, and inspect the override source before retrying. Do not enable native and managed services together to restore the interface. To avoid changing other configuration through alias references, proxy settings are read-only when the native configuration subtree or its ancestors contain YAML anchors / aliases; anchors belonging only to unrelated entries remain supported.
 
 ## How do I temporarily disable HMR (Hot Module Reload)?
 

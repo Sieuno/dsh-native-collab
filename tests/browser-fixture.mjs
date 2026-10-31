@@ -19,7 +19,7 @@ export async function clientModule(globals = {}, options = {}) {
   let spec
   runInNewContext(await clientSource(options), {
     setTimeout, clearTimeout, document: { activeElement: null }, ...globals,
-    window: { __ModuleLoader__: { load(value) { spec = value } } },
+    window: { ...globals.window, __ModuleLoader__: { load(value) { spec = value } } },
   })
   return spec
 }

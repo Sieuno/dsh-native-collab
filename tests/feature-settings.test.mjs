@@ -14,7 +14,11 @@ async function fixture(language = 'en', options = {}) {
   const fakeSetTimeout = (fn, delay) => { const id = ++timerId; timers.set(id, { fn, delay }); return id }
   const fakeClearTimeout = id => timers.delete(id)
   const flushTimers = async () => { page(); const pending = [...timers.values()]; timers.clear(); for (const timer of pending) { assert.equal(timer.delay, 350); timer.fn() }; await settle() }
-  const spec = await clientModule({ setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout })
+  const focusListeners = new Set()
+  const spec = await clientModule({ setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout, window: {
+    addEventListener(name, listener) { if (name === 'focus') focusListeners.add(listener) },
+    removeEventListener(name, listener) { if (name === 'focus') focusListeners.delete(listener) },
+  } })
   const calls = { writes: [], describes: 0 }
   const serverValue = { ...options.saved }
   let revision = 9
@@ -53,15 +57,21 @@ async function fixture(language = 'en', options = {}) {
       return { ok: true, value: true }
     },
   }
-  let releaseNativeWrite
+  let releaseNativeWrite, holdNextNativeRead = false
+  const heldNativeReads = []
   let nativeRevision = 1
   let nativeValues = { maxDepth: 2, maxActiveSubagents: 8, ...options.nativeValues }
   calls.nativeWrites = []
   const nativeView = () => ({ values: { ...nativeValues }, revision: 'native-' + nativeRevision, writable: options.nativeFailure !== 'readonly' })
   const remote = { settings, collabUi: {
     async limits() {
+      const value = nativeView()
+      if (holdNextNativeRead) {
+        holdNextNativeRead = false
+        await new Promise((resolve, reject) => heldNativeReads.push({ resolve, reject }))
+      }
       if (options.nativeFailure === 'read') throw new Error(SECRET)
-      return { ok: true, value: nativeView() }
+      return { ok: true, value }
     },
     async saveLimits(request) {
       calls.nativeWrites.push({ ...request })
@@ -98,6 +108,12 @@ async function fixture(language = 'en', options = {}) {
   const input = (id, value, property = 'checked') => byId(id).props.onChange({ target: { [property]: value } })
   page(); await settle(); page()
   return { page, byId, input, calls, serverValue, locale, props, flushTimers,
+    focus() { for (const listener of focusListeners) listener() },
+    holdNativeRead() { holdNextNativeRead = true },
+    releaseNativeRead(failure = false) {
+      const held = heldNativeReads.shift(); assert.ok(held, 'a native read must be pending')
+      if (failure) held.reject(new Error(SECRET)); else held.resolve()
+    },
     releaseNativeWrite() { assert.equal(typeof releaseNativeWrite, 'function'); releaseNativeWrite() },
     changeNativeValues(patch) { nativeValues = { ...nativeValues, ...patch }; nativeRevision++ },
     releaseWrite() { assert.equal(typeof releaseWrite, 'function'); releaseWrite() }, setDescribeFailure(value) { describeFailure = value },
@@ -328,4 +344,37 @@ test('unknown/unready settings identity, schema, revision, and refresh failures 
       assert.doesNotMatch(JSON.stringify(f.page()), /SECRET_TOKEN|\/private\/profile|\[object Object\]/)
     } finally { await f.dispose() }
   }
+})
+
+for (const failure of [false, true]) {
+  test(`an older native focus read ${failure ? 'failure' : 'response'} cannot replace a newer snapshot or draft`, async () => {
+    const f = await fixture()
+    try {
+      f.holdNativeRead(); f.focus(); await settle()
+      f.changeNativeValues({ maxDepth: 4 })
+      f.focus(); await settle()
+      assert.equal(f.byId('native-max-depth').props.value, '4')
+      assert.equal(f.byId('native-max-depth').props.disabled, false)
+      f.input('native-max-depth', '', 'value'); f.page()
+      f.releaseNativeRead(failure); await settle()
+      assert.equal(f.byId('native-max-depth').props.value, '', 'late reads never replace an invalid draft')
+      assert.equal(f.byId('native-max-depth').props.disabled, false)
+      assert.ok(f.byId('native-limits-invalid'))
+      assert.equal(nodes(f.page(), node => node.props?.['data-testid'] === 'native-limits-error').length, 0)
+      f.input('native-max-active', '10', 'value'); await f.flushTimers()
+      assert.equal(f.calls.nativeWrites.length, 0, 'a cleared depth must never become a numeric zero through stale data')
+    } finally { await f.dispose() }
+  })
+}
+
+test('an older native read cannot replace a newer snapshot even without edits', async () => {
+  const f = await fixture()
+  try {
+    f.holdNativeRead(); f.focus(); await settle()
+    f.changeNativeValues({ maxDepth: 4 })
+    f.focus(); await settle()
+    f.releaseNativeRead(); await settle()
+    assert.equal(f.byId('native-max-depth').props.value, '4')
+    assert.equal(f.calls.nativeWrites.length, 0)
+  } finally { await f.dispose() }
 })

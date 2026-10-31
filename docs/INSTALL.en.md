@@ -18,7 +18,8 @@ When using a local or offline package, replace the package name with the path to
 
 ## 2. Configuration & Automatic Saving
 
-- **Automatic Saving**: All changes save automatically without manual save buttons; errors appear beside the affected item.
+- **Subagent Settings**: When the native settings page is unavailable, this plugin edits its settings on its behalf. Depth and parallelism load automatically; valid changes save back to the original `subagent` entry in this Profile, without a separate copy. Existing depth rules are unchanged; subsequent admission and native services use the same configuration.
+- **Automatic Saving**: Subagent settings and enhancement preferences save automatically; errors appear beside the affected section. No manual reload or save button is needed.
 - **No Manual Editing**: Standard configuration changes need no file editing and no service switching.
 - **Activation Lifecycle**:
   - **Model Source**: Applies immediately to subsequent queries and agent creation.

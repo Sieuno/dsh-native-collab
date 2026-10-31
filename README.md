@@ -1,6 +1,6 @@
 # DSH Native Collab · 原生协作增强
 
-**Deepseek Harness Agent 协作增强（基于原版插件）**：为 DeepSeek Harness (DSH) 提供子 Agent 沟通增强与 Team 模型选择支持，是派生自 DSH 的**非官方社区插件**（非官方发行版）。
+**Deepseek Harness Agent 协作增强（基于原版插件）**：为 DeepSeek Harness (DSH) 提供子 Agent 沟通增强与 Team 模型选择支持，是修改自 DSH 的**非官方社区插件**（非官方发行版）。
 
 [English](https://github.com/Sieuno/dsh-native-collab/blob/main/README.en.md) · [安装指南](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/INSTALL.md) · [常见问题 (FAQ)](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.md) · [反馈](https://github.com/Sieuno/dsh-native-collab/issues)
 
@@ -22,7 +22,8 @@ dsh plugin --profile <profile> add @sieuno/dsh-native-collab
 
 重启后进入插件管理页面：
 
-- **修改自动保存**：页面中的各项设置修改后会自动保存，无需点击保存按钮；若保存未确认或失败，对应项旁将显示错误提示。
+- **子智能体设置**：本插件设置页代理原生最大递归深度与并行数量上限，进入页面自动读取，合法修改后自动写回原生 `subagent` 配置。后续委派与容量准入读取同一来源，切回原生服务仍保留；不改变原有深度规则。
+- **增强偏好自动保存**：沟通、模型来源与自动唤醒等偏好修改后自动保存；若未确认或失败，对应项旁显示错误提示。
 - **生效方式**：模型来源立即生效于后续的模型查询与创建；增强开关及连续自动唤醒轮数上限等启动配置，在按提示正常关闭服务并重启同一 Profile 后应用（单纯刷新网页不算重启）。
 - **卸载与清理**：卸载前请先禁用插件，并重启同一 Profile 确认已恢复原生服务；若启动覆盖中仍有引用，直接卸载可能导致 DSH 找不到插件而启动失败。恢复步骤见[常见问题 (FAQ)](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.md)。
 - **启动失败排查**：卸载或降级后若 DSH 无法启动，先检查 Profile 目录下的 `*.patch.json` 外部启动覆盖文件是否仍引用本插件，再清理 Profile patch 中的残留行；步骤见[常见问题 (FAQ)](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.md)。

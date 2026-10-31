@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Native Collaboration Bundle",
-    "description": "Manage child Agent communication, Team model selection, and the consecutive automatic wake-up limit in one place. Changes save automatically and take effect after restart."
+    "description": "Manage subagent settings, communication, Team model selection and automatic wake-ups. Settings load automatically and changes save automatically."
   },
   "collabUi": {
     "title": "Collaboration component diagnostics",
@@ -59,8 +59,8 @@
     "phase.pending": "Pending",
     "phase.loading": "Loading",
     "phase.unloading": "Unloading",
-    "settingsSummary": "Child-agent communication, Team enhancements, and the consecutive automatic wake-up limit",
-    "settingsScope": "All settings save automatically, with errors displayed beside the affected item. Model source changes apply immediately to subsequent queries and agent creation; restart-required settings take effect after restarting the Profile without interrupting active chats.",
+    "settingsSummary": "Subagent settings, communication, Team enhancements and automatic wake-ups",
+    "settingsScope": "Settings load automatically and valid changes save automatically. Subagent settings share the original DSH configuration. Model source applies to subsequent queries and creation; restart-required enhancements apply after restarting this Profile.",
     "savedState": "Saved",
     "observedState": "Startup snapshot",
     "pendingState": "Compared with startup",
@@ -72,7 +72,7 @@
     "modelSourceConversation": "Child-model list captured when the conversation started (native setting)",
     "modelSourceSettings": "Child-model list in current DSH settings",
     "modelSourceAll": "All models currently available in DSH",
-    "autoSaveDescription": "Changes save automatically; errors appear beside the setting. The model source applies to subsequent queries and creation. Settings that require a restart take effect after a normal restart without interrupting the current chat.",
+    "autoSaveDescription": "Changes save automatically, with status or errors beside the affected section. No manual reload or save button is needed.",
     "autoSaving": "Saving…",
     "autoSaved": "Saved automatically",
     "autoSaveFailed": "Automatic save failed",
@@ -188,6 +188,18 @@
       "status-refresh-failed": "Settings refreshed and drafts kept; runtime status is unconfirmed but does not indicate failure. You can continue editing."
     },
     "diagnosis.remote-unavailable": "The plugin page cannot reach the collaboration service right now. Restart the app and reopen this page; if it still fails, follow the plugin notes and the project FAQ to recover.",
-    "diagnosis.unknown": "The action did not complete. Expand the technical details for the diagnostic code, then follow the plugin notes and try again."
+    "diagnosis.unknown": "The action did not complete. Expand the technical details for the diagnostic code, then follow the plugin notes and try again.",
+    "limits": {
+      "title": "Subagent settings",
+      "depth": "Maximum recursion depth",
+      "capacity": "Subagent parallelism limit",
+      "help": "The native Subagent settings page is unavailable while this plugin is enabled, so this section edits those settings on its behalf. Changes are written to the original DSH Subagent configuration; changes made there also affect this plugin. With recursion depth 0, subagents cannot create subagents. Existing multi-level subagents are not stopped.",
+      "saved": "Saved automatically and synchronized with the original DSH Subagent settings.",
+      "invalid": "Depth must be a whole number of 0 or more; parallelism must be a whole number of 1 or more. Both must be within the safe integer range.",
+      "readonly": "The native configuration is overridden or its write target cannot be confirmed. Limits are read-only.",
+      "unavailable": "Subagent settings could not be loaded and verified automatically. Editing is locked; reopen the plugin settings page to try again.",
+      "conflict": "The configuration changed elsewhere; this change was not saved and your draft is kept. Keep a copy of your draft and reopen the plugin settings page to review the latest values.",
+      "saveFailed": "Automatic save could not be confirmed; your draft is kept. Keep a copy of your draft and reopen the plugin settings page to check saved values before retrying."
+    }
   }
 }

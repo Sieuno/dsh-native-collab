@@ -149,7 +149,7 @@ test('mounted Cordis namespaces are reachable without injecting them', async t =
   assert.equal(typeof seen.collabGet.status, 'function')
   assert.equal(typeof seen.settingsGet.describe, 'function')
   assert.deepEqual(Array.from(control.contribution.services, item => item.namespace), ['collabUi'])
-  assert.deepEqual(Array.from(control.contribution.descriptors, item => item.method), ['status'])
+  assert.deepEqual(Array.from(control.contribution.descriptors, item => item.method), ['status', 'limits', 'saveLimits'])
   assert.equal(injected.remoteMountError, null)
   assert.deepEqual(await injected.readStatus(), { rows: [] })
   assert.equal(control.status, 1)

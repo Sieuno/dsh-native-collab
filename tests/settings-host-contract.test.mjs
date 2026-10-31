@@ -64,33 +64,35 @@ const { default: CollabUiService } = pluginLoader(join(root, 'packages/agent-tea
 const NS = 'dsh-native-collab-ui'
 const MODULE = '@sieuno/dsh-native-collab'
 
-async function fixture(initial = {}, inherited = {}) {
+async function fixture(initial = {}, inherited = {}, { native = false, profileConfig = true } = {}) {
+  const namespace = native ? 'subagent' : NS
+  const moduleName = native ? '@deepseek-ai/dsh-subagent' : MODULE
   const directory = await mkdtemp(join(tmpdir(), 'dsh-collab-settings-'))
   const patchPath = join(directory, 'cordis.patch.yml')
   const sidecar = join(directory, 'unrelated.json')
-  await writeFile(patchPath, yaml.stringify([{ id: NS, name: MODULE, config: initial }]))
+  await writeFile(patchPath, yaml.stringify([{ id: namespace, name: moduleName, ...(profileConfig ? { config: initial } : {}) }]))
   await writeFile(sidecar, JSON.stringify({ sentinel: 'unchanged' }))
   await writeFile(join(directory, 'package.json'), '{}\n')
   const ctx = new Context()
-  const profile = { name: 'isolated-contract', home: directory, dir: directory, patchPath, installAnchor: directory }
+  const profile = { name: 'isolated-contract', home: directory, dir: directory, patchPath, installAnchor: directory, overlays: [] }
   ctx.provide('profileContext', profile)
   let entry
   ctx.provide('loader', { await: () => Promise.resolve(), entries: () => entry ? [entry] : [] })
   ctx.provide('pluginManager', { listPlugins: async () => [] })
-  const fiber = ctx.plugin(CollabUiService, { ...inherited, ...initial })
-  await fiber.await()
-  assert.equal(fiber.state, FiberState.ACTIVE)
+  const fiber = native ? undefined : ctx.plugin(CollabUiService, { ...inherited, ...initial })
+  if (fiber) { await fiber.await(); assert.equal(fiber.state, FiberState.ACTIVE) }
   entry = {
-    id: NS, options: { id: NS, name: MODULE, config: { ...inherited, ...initial } }, fiber,
+    id: namespace, options: { id: namespace, name: moduleName, config: native ? (profileConfig ? { ...initial } : { ...inherited }) : { ...inherited, ...initial } }, fiber,
+    ...(native ? { disabled: true, async update({ config }) { this.options.config = structuredClone(config) } } : {}),
     parent: { tree: { ctx: { fiber: { entry: { id: 'include' } } } } },
   }
-  const layer = [{ id: NS, name: MODULE, config: inherited }]
+  const layer = [{ id: namespace, name: moduleName, config: inherited }]
   const compose = layers => {
     let config = {}
     for (const patches of layers) for (const patch of patches) {
-      if (patch.id === NS && patch.config !== undefined) config = { ...config, ...patch.config }
+      if (patch.id === namespace && patch.config !== undefined) config = native ? structuredClone(patch.config) : { ...config, ...patch.config }
     }
-    return [{ id: NS, name: MODULE, config }]
+    return [{ id: namespace, name: moduleName, config }]
   }
   const appBoot = {
     loadProfileDirectory() { return { layers: [{ patches: layer }], patches: yaml.parse(readFileSync(patchPath, 'utf8')) } },
@@ -120,13 +122,54 @@ async function fixture(initial = {}, inherited = {}) {
   await settingsFiber.await()
   assert.equal(settingsFiber.state, FiberState.ACTIVE)
   const settings = ctx.get('settings')
-  const snapshot = () => settings.describe().find(item => item.ns === NS)
-  assert.ok(snapshot())
+  const snapshot = () => settings.describe().find(item => item.ns === namespace)
+  if (native) assert.equal(snapshot(), undefined, 'the official form excludes a disabled native entry')
+  else assert.ok(snapshot())
   return { ctx, fiber, entry, settings, snapshot, patchPath, sidecar, directory,
-    readConfig: async () => yaml.parse(await readFile(patchPath, 'utf8')).find(item => item.id === NS)?.config ?? {},
+    readConfig: async () => yaml.parse(await readFile(patchPath, 'utf8')).find(item => item.id === namespace)?.config ?? {},
     async close() { await ctx.fiber.dispose() },
   }
 }
+
+test('native limits use official ConfigEditor layers while the original SettingsForms namespace is unavailable', async t => {
+  const { NativeSubagentLimits } = pluginLoader(join(root, 'packages/agent-team/src/native-subagent-limits.ts'))
+  const f = await fixture({ maxDepth: 2, otherNativeFlag: false }, { maxDepth: 3, maxActiveSubagents: 4 }, { native: true })
+  try {
+    const layer = f.ctx.get('configEditor').configuration().find(row => row.entry === f.entry)
+    assert.equal(layer.inherited.maxActiveSubagents, 4)
+    assert.deepEqual(layer.override, { maxDepth: 2, otherNativeFlag: false })
+    assert.equal(f.snapshot(), undefined)
+    const adapter = new NativeSubagentLimits(f.ctx)
+    const initial = await adapter.read()
+    assert.deepEqual(initial.values, { maxDepth: 2, maxActiveSubagents: 8 }, 'profile config replaces the inherited object, rather than merging individual fields')
+    const unrelated = await readFile(f.sidecar)
+    const saved = await adapter.save({ revision: initial.revision, maxDepth: 0, maxActiveSubagents: 3 })
+    assert.deepEqual(saved.values, { maxDepth: 0, maxActiveSubagents: 3 })
+    assert.deepEqual(await f.readConfig(), { maxDepth: 0, otherNativeFlag: false, maxActiveSubagents: 3 })
+    assert.deepEqual(await readFile(f.sidecar), unrelated)
+    assert.equal(f.entry.fiber, undefined, 'saving never activates the original provider')
+    assert.equal(f.snapshot(), undefined, 'this does not claim to restore the native page')
+    t.diagnostic('Official ConfigEditor.configuration with a disabled native entry, real temporary YAML and plugin atomic/lock helpers; profile composition and entry update remain explicit adapters, not a full Host.')
+  } finally { await f.close() }
+})
+
+test('inherited native values and unrelated fields survive the first explicit save and native schema rehydration', async () => {
+  const { NativeSubagentLimits } = pluginLoader(join(root, 'packages/agent-team/src/native-subagent-limits.ts'))
+  const inherited = { maxDepth: 3, maxActiveSubagents: 4, otherNativeFlag: false }
+  const f = await fixture({}, inherited, { native: true, profileConfig: false })
+  try {
+    const adapter = new NativeSubagentLimits(f.ctx)
+    const initial = await adapter.read()
+    assert.deepEqual(initial.values, { maxDepth: 3, maxActiveSubagents: 4 })
+    await adapter.save({ revision: initial.revision, maxDepth: 2, maxActiveSubagents: 5 })
+    const persisted = await f.readConfig()
+    assert.deepEqual(persisted, { maxDepth: 2, maxActiveSubagents: 5, otherNativeFlag: false })
+    const nativeRuntime = require('@deepseek-ai/dsh-subagent').SubagentRuntime
+    const config = cordis.resolveConfig(nativeRuntime, persisted)
+    assert.equal(config.maxDepth.get(), 2)
+    assert.equal(config.maxActiveSubagents.get(), 5)
+  } finally { await f.close() }
+})
 
 test('actual SettingsForms + ConfigEditor reject invalid consecutive wake limits before YAML write', async t => {
   const f = await fixture({ modelEnhancement: true, teamRequestLimit: 3 })

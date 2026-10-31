@@ -36,6 +36,7 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import { ASSEMBLY_ROLES, classifyAssembly } from "./assembly-layout.js";
 import { ManagedRuntime } from "./managed-runtime.js";
 import { installPresetAdapter } from "./preset-adapter.js";
+import { NativeSubagentLimits, currentNativeSubagentLimits } from "./native-subagent-limits.js";
 const ROWS = ASSEMBLY_ROLES;
 const ENABLE_LINKED = new Set(ASSEMBLY_ROLES.filter(row => row.placement === 'runtime').map(row => row.legacyId));
 const COLLAB_UI_BRAND = Symbol.for('@sieuno/dsh-native-collab.collabUi');
@@ -107,13 +108,19 @@ function inventoryRows(value) {
 let CollabUiService = (() => {
     let _classSuper = TypertRemoteService;
     let _instanceExtraInitializers = [];
+    let _limits_decorators;
+    let _saveLimits_decorators;
     let _status_decorators;
     let _preview_decorators;
     return class CollabUiService extends _classSuper {
         static {
             const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
+            _limits_decorators = [Remote];
+            _saveLimits_decorators = [Remote];
             _status_decorators = [Remote];
             _preview_decorators = [Remote];
+            __esDecorate(this, null, _limits_decorators, { kind: "method", name: "limits", static: false, private: false, access: { has: obj => "limits" in obj, get: obj => obj.limits }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _saveLimits_decorators, { kind: "method", name: "saveLimits", static: false, private: false, access: { has: obj => "saveLimits" in obj, get: obj => obj.saveLimits }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _status_decorators, { kind: "method", name: "status", static: false, private: false, access: { has: obj => "status" in obj, get: obj => obj.status }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _preview_decorators, { kind: "method", name: "preview", static: false, private: false, access: { has: obj => "preview" in obj, get: obj => obj.preview }, metadata: _metadata }, null, _instanceExtraInitializers);
             if (_metadata) Object.defineProperty(this, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
@@ -164,6 +171,16 @@ let CollabUiService = (() => {
                 }
                 return raw;
             });
+        }
+        /** Original native entry remains the single source of delegation limits. */
+        currentSubagentLimits() {
+            return currentNativeSubagentLimits(this.ctx);
+        }
+        async limits() {
+            return new NativeSubagentLimits(this.ctx).read();
+        }
+        async saveLimits(request) {
+            return new NativeSubagentLimits(this.ctx).save(request);
         }
         /** Startup snapshot frozen by this construction. Not a live subscription. */
         assemblySnapshot() {

@@ -11,6 +11,7 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { ASSEMBLY_ROLES, classifyAssembly } from './assembly-layout.ts'
 import { ManagedRuntime, type ManagedRuntimeStatus } from './managed-runtime.ts'
 import { installPresetAdapter } from './preset-adapter.ts'
+import { NativeSubagentLimits, currentNativeSubagentLimits, type LimitsView, type LimitsRequest, type NativeSubagentLimitsValues } from './native-subagent-limits.ts'
 
 const ROWS = ASSEMBLY_ROLES
 const ENABLE_LINKED = new Set<string>(ASSEMBLY_ROLES.filter(row => row.placement === 'runtime').map(row => row.legacyId))
@@ -168,6 +169,21 @@ export class CollabUiService extends TypertRemoteService {
       }
       return raw
     })
+  }
+
+  /** Original native entry remains the single source of delegation limits. */
+  currentSubagentLimits(): NativeSubagentLimitsValues | undefined {
+    return currentNativeSubagentLimits(this.ctx)
+  }
+
+  @Remote
+  async limits(): Promise<LimitsView> {
+    return new NativeSubagentLimits(this.ctx).read()
+  }
+
+  @Remote
+  async saveLimits(request: LimitsRequest): Promise<LimitsView> {
+    return new NativeSubagentLimits(this.ctx).save(request)
   }
 
   /** Startup snapshot frozen by this construction. Not a live subscription. */

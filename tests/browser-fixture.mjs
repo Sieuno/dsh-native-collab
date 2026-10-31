@@ -50,10 +50,19 @@ export function clientContext(context) {
   const remote = context.remote
   remote.$mount = async contribution => {
     assert.deepEqual(Array.from(contribution.services, item => item.namespace), ['collabUi'])
-    assert.deepEqual(Array.from(contribution.descriptors, item => item.method), ['status'])
+    const methods = ['status', 'limits', 'saveLimits']
+    assert.deepEqual(Array.from(contribution.descriptors, item => item.method), methods)
+    const request = contribution.descriptors.find(item => item.method === 'saveLimits').parameters[0]
+    assert.equal(request.wire, 'request')
+    assert.equal(request.source, 'json')
+    assert.equal(request.codec.mode, 'strict')
+    assert.throws(() => request.codec.decode({ revision: 'test', maxDepth: -1, maxActiveSubagents: 8 }), /invalid native limits/)
     const original = remote.collabUi
-    remote.collabUi = Object.fromEntries(['status'].map(method => [method,
-      async (...args) => ({ ok: true, value: await original[method](...args) }),
+    remote.collabUi = Object.fromEntries(methods.map(method => [method,
+      async (...args) => {
+        const result = await original[method](...args)
+        return result && typeof result.ok === 'boolean' ? result : { ok: true, value: result }
+      },
     ]))
     return () => { remote.collabUi = original }
   }

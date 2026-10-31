@@ -26,13 +26,15 @@ npm run validate:package
 
 | 层 | 命令 | 文件数 | 依赖与范围 |
 |---|---|---:|---|
-| 本地契约 / UI 单元 | `npm test` | 21 | 本地依赖、构建产物和元素/协议夹具，含不需要 SDK 的模型选择策略；不启动真实 Host |
+| 本地契约 / UI 单元 | `npm test` | 22 | 本地依赖、构建产物和元素/协议夹具，含不需要 SDK 的模型选择策略；不启动真实 Host |
 | SDK / 隔离集成 | `npm run test:sdk` | 7 | 匹配的可执行 SDK；不要求官方源码 |
 | 官方设置源码契约 | `npm run test:source` | 1 | 匹配 SDK、`DSH_COMPAT_TARGET`、`DSH_SDK_ENVIRONMENT`、`DSH_SOURCE_ROOT`；在临时文件上执行官方设置与配置编辑源码 |
 | 官方客户端协议 | `npm run test:client` | 1 | `DSH_OFFICIAL_ASAR`；真实 ClientRemote 的离线连接断言 |
 | 官方发现 / roster | `npm run test:discovery` | 1 | 匹配 SDK、`DSH_COMPAT_TARGET`、`DSH_SDK_ENVIRONMENT`、`DSH_OFFICIAL_SOURCE_ROOT`；官方 roster 原文哈希校验 |
 
-共 31 个功能测试文件。文件数以 [scripts/test.mjs](scripts/test.mjs) 的登记表为准；登记表与实际文件不一致时，`scripts/test.mjs` 会先失败。可在一次调用中选择多层，例如 `node scripts/test.mjs unit sdk`；同一文件不会重复执行。
+共 32 个功能测试文件。文件数以 [scripts/test.mjs](scripts/test.mjs) 的登记表为准；登记表与实际文件不一致时，`scripts/test.mjs` 会先失败。可在一次调用中选择多层，例如 `node scripts/test.mjs unit sdk`；同一文件不会重复执行。
+
+原生运行限制的本地测试使用临时 YAML 与显式配置编辑器适配器，检查原生条目单一来源、版本冲突、覆盖拒绝、局部保存、共享 YAML 锚点 / 别名拒写及失败回滚；客户端元素夹具检查自动读取、乱序响应不覆盖新快照或草稿、串行防抖保存、无手动按钮和失败草稿。SDK 用真实运行时读限回调与容量池检查后续准入，不等于真实 Host 安装、RPC、完整 Loader 重载或浏览器端到端验收。
 
 本地层覆盖自动唤醒守卫/路由、模型来源、自动保存、管理生命周期、状态诊断词典和发布契约。旧请求预算、Host 提示豁免和不取消 Agent 的源码断言已归入 [auto-wake-routing.test.mjs](tests/auto-wake-routing.test.mjs)，不再单设伪 Host 层。SDK 层覆盖投影、子对话引导、注册/通信、状态与生命周期；模型选择纯策略已移入本地层，官方设置源码契约独立为 source 层。
 
@@ -63,7 +65,7 @@ node scripts/test.mjs source discovery
 
 SDK 准备脚本要求 Cordis、Schemastery、zod 单例，并拒绝暴露 `@deepseek-ai/dsh-settings`、`@deepseek-ai/dsh-config-editor`、`@deepseek-ai/dsh-app-boot`；后者是现有运行时测试的环境负契约，不要把官方工作区 node_modules 全量链接进来。SDK 和类型检查只使用真实已安装包，设置契约额外需要已固定的官方源码和显式安装的 js-yaml。
 
-共 31 个功能文件中，CI 门禁覆盖 30 个；唯一未自动运行的是依赖安装版 ASAR 的客户端协议文件。目前尚无经审计、带固定校验值的独立官方 rc.2 ASAR 下载源，故保留 `DSH_OFFICIAL_ASAR=... npm run test:client` 的本地验收方式，不下载或执行桌面安装器，也不把缺少 ASAR 显示成通过。以上绿灯都不代表真实 Host 或浏览器端到端验收。
+共 32 个功能文件中，CI 门禁覆盖 31 个；唯一未自动运行的是依赖安装版 ASAR 的客户端协议文件。目前尚无经审计、带固定校验值的独立官方 rc.2 ASAR 下载源，故保留 `DSH_OFFICIAL_ASAR=... npm run test:client` 的本地验收方式，不下载或执行桌面安装器，也不把缺少 ASAR 显示成通过。以上绿灯都不代表真实 Host 或浏览器端到端验收。
 
 ### 版本差异的维护边界
 

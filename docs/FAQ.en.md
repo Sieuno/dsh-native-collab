@@ -2,11 +2,19 @@
 
 ## How do I enable features after installation?
 
-Configure options in the plugin management page. All changes save automatically with no manual migration step and without hot-migrating running agents. Restart the Profile normally for settings that require it (browser refresh alone is not a restart).
+Configure options in the plugin management page. Subagent settings and enhancement preferences load and save automatically. Normal saves need no manual migration and do not hot-migrate running agents. Restart the Profile normally for settings that require it (browser refresh alone is not a restart).
 
 ## Why did my active conversation not change after saving?
 
 Feature toggles and consecutive automatic wake-up limits are startup settings that take effect on restart for new sessions or turns. Model source settings apply to subsequent queries and creation. In-memory wake-up counters reset on restart.
+
+## Why are limits missing from the native Subagent page, and how can I edit them?
+
+Managed takeover disables the native service entry, so the native page may show only model selection. Use **Subagent settings** on this plugin’s settings page. Values load automatically and valid changes save automatically. It reads the host-composed native configuration and writes changes back to the current Profile’s `subagent` entry, without storing a separate plugin copy.
+
+Defaults are depth 1 and parallelism 8. Depth 0 disables delegation for tools inheriting this setting; an explicit tool depth still takes precedence. Parallelism counts live and starting children across the root Agent’s recursion tree, excluding the root. Changes apply to subsequent admission; lowering capacity does not stop existing children. The automatic wake-up limit is separate.
+
+Saving checks revisions and preserves unrelated configuration. Higher-priority overrides, ambiguous targets, and concurrent changes reject the save. Keep your draft, reload limits, and inspect the override source before retrying. Do not enable native and managed services together to restore the interface. To avoid changing other configuration through alias references, proxy settings are read-only when the native configuration subtree or its ancestors contain YAML anchors / aliases; anchors belonging only to unrelated entries remain supported.
 
 ## How do I temporarily disable HMR (Hot Module Reload)?
 

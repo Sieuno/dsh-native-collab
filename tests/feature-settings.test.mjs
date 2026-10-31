@@ -14,7 +14,11 @@ async function fixture(language = 'en', options = {}) {
   const fakeSetTimeout = (fn, delay) => { const id = ++timerId; timers.set(id, { fn, delay }); return id }
   const fakeClearTimeout = id => timers.delete(id)
   const flushTimers = async () => { page(); const pending = [...timers.values()]; timers.clear(); for (const timer of pending) { assert.equal(timer.delay, 350); timer.fn() }; await settle() }
-  const spec = await clientModule({ setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout })
+  const focusListeners = new Set()
+  const spec = await clientModule({ setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout, window: {
+    addEventListener(name, listener) { if (name === 'focus') focusListeners.add(listener) },
+    removeEventListener(name, listener) { if (name === 'focus') focusListeners.delete(listener) },
+  } })
   const calls = { writes: [], describes: 0 }
   const serverValue = { ...options.saved }
   let revision = 9
@@ -53,10 +57,39 @@ async function fixture(language = 'en', options = {}) {
       return { ok: true, value: true }
     },
   }
-  const remote = { settings, collabUi: { async status() { return {
-    profileName: 'test', hmrEnabled: null, rows: [], desired: 'unchanged', pendingRestart: 'unknown', writeSupport: 'unsupported', operationError: 'transaction-unavailable', error: null,
-    assembly: options.assembly ? { present: true, ...options.assembly } : null,
-  } } } }
+  let releaseNativeWrite, holdNextNativeRead = false
+  const heldNativeReads = []
+  let nativeRevision = 1
+  let nativeValues = { maxDepth: 2, maxActiveSubagents: 8, ...options.nativeValues }
+  calls.nativeWrites = []
+  const nativeView = () => ({ values: { ...nativeValues }, revision: 'native-' + nativeRevision, writable: options.nativeFailure !== 'readonly' })
+  const remote = { settings, collabUi: {
+    async limits() {
+      const value = nativeView()
+      if (holdNextNativeRead) {
+        holdNextNativeRead = false
+        await new Promise((resolve, reject) => heldNativeReads.push({ resolve, reject }))
+      }
+      if (options.nativeFailure === 'read') throw new Error(SECRET)
+      return { ok: true, value }
+    },
+    async saveLimits(request) {
+      calls.nativeWrites.push({ ...request })
+      if (options.holdNativeFirstWrite && calls.nativeWrites.length === 1) await new Promise(resolve => { releaseNativeWrite = resolve })
+      if (options.nativeFailure === 'conflict') return { ok: false, error: { message: 'native-limits-conflict' } }
+      if (options.nativeFailure === 'save') throw new Error(SECRET)
+      assert.equal(request.revision, 'native-' + nativeRevision)
+      nativeValues = { maxDepth: request.maxDepth, maxActiveSubagents: request.maxActiveSubagents }
+      nativeRevision++
+      const result = nativeView()
+      if (options.nativeFailure === 'readback') result.values.maxDepth++
+      return { ok: true, value: result }
+    },
+    async status() { return {
+      profileName: 'test', hmrEnabled: null, rows: [], desired: 'unchanged', pendingRestart: 'unknown', writeSupport: 'unsupported', operationError: 'transaction-unavailable', error: null,
+      assembly: options.assembly ? { present: true, ...options.assembly } : null,
+    } },
+  } }
   const registrations = []
   const dispose = await spec.factory(clientRequire(renderer.React)).apply(clientContext({ remote,
     locale: { register: (...args) => locale.register(...args) },
@@ -64,11 +97,26 @@ async function fixture(language = 'en', options = {}) {
   }))
   const row = registrations.find(entry => entry.contract.name === 'plugins.row.config')
   const props = { view: 'page', t: locale.bind('collabUi'), form: options.form, ...row.contract.inject() }
-  const page = () => renderer.draw(row.Component, props)
+  const expand = node => {
+    if (Array.isArray(node)) return node.map(expand)
+    if (!node || typeof node !== 'object') return node
+    if (typeof node.type === 'function') return expand(renderer.draw(node.type, node.props))
+    return { ...node, children: expand(node.children), props: { ...node.props, ...(node.props?.children ? { children: expand(node.props.children) } : {}) } }
+  }
+  const page = () => expand(renderer.draw(row.Component, props))
   const byId = id => { const node = nodes(page(), item => item.props?.['data-testid'] === id)[0]; assert.ok(node, `Missing ${id}`); return node }
   const input = (id, value, property = 'checked') => byId(id).props.onChange({ target: { [property]: value } })
   page(); await settle(); page()
-  return { page, byId, input, calls, serverValue, locale, props, flushTimers, releaseWrite() { assert.equal(typeof releaseWrite, 'function'); releaseWrite() }, setDescribeFailure(value) { describeFailure = value },
+  return { page, byId, input, calls, serverValue, locale, props, flushTimers,
+    focus() { for (const listener of focusListeners) listener() },
+    holdNativeRead() { holdNextNativeRead = true },
+    releaseNativeRead(failure = false) {
+      const held = heldNativeReads.shift(); assert.ok(held, 'a native read must be pending')
+      if (failure) held.reject(new Error(SECRET)); else held.resolve()
+    },
+    releaseNativeWrite() { assert.equal(typeof releaseNativeWrite, 'function'); releaseNativeWrite() },
+    changeNativeValues(patch) { nativeValues = { ...nativeValues, ...patch }; nativeRevision++ },
+    releaseWrite() { assert.equal(typeof releaseWrite, 'function'); releaseWrite() }, setDescribeFailure(value) { describeFailure = value },
     async dispose() { renderer.destroy(); await dispose() } }
 }
 async function settle() { for (let i = 0; i < 8; i += 1) await tick() }
@@ -203,6 +251,87 @@ test('serialized Settings schemas follow references and enum unions while saving
   } finally { await f.dispose() }
 })
 
+test('native settings automatically load and debounce saves without manual buttons', async () => {
+  for (const language of ['en', 'zh']) {
+    const f = await fixture(language)
+    try {
+      assert.equal(f.byId('native-max-depth').props.value, '2')
+      assert.equal(f.byId('native-max-active').props.value, '8')
+      const section = f.byId('native-limits')
+      assert.equal(nodes(section, node => node.type === 'button').length, 0)
+      f.input('native-max-depth', '0', 'value')
+      f.input('native-max-active', '3', 'value')
+      await settle()
+      assert.equal(f.calls.nativeWrites.length, 0, 'partial typing is not an immediate file write')
+      await f.flushTimers()
+      assert.deepEqual(f.calls.nativeWrites, [{ revision: 'native-1', maxDepth: 0, maxActiveSubagents: 3 }])
+      assert.ok(f.byId('native-limits-saved'))
+      assert.equal(f.calls.writes.length, 0, 'native settings never enter the plugin preference namespace')
+    } finally { await f.dispose() }
+  }
+})
+
+test('native autosave serializes in-flight edits without discarding a newer draft', async () => {
+  const f = await fixture('en', { holdNativeFirstWrite: true })
+  try {
+    f.input('native-max-depth', '3', 'value'); await f.flushTimers()
+    assert.equal(f.calls.nativeWrites.length, 1)
+    f.input('native-max-active', '10', 'value'); await f.flushTimers()
+    assert.equal(f.calls.nativeWrites.length, 1, 'no concurrent native writes')
+    f.releaseNativeWrite(); await settle()
+    assert.deepEqual(f.calls.nativeWrites, [
+      { revision: 'native-1', maxDepth: 3, maxActiveSubagents: 8 },
+      { revision: 'native-2', maxDepth: 3, maxActiveSubagents: 10 },
+    ])
+    assert.equal(f.byId('native-max-depth').props.value, '3')
+    assert.equal(f.byId('native-max-active').props.value, '10')
+    assert.ok(f.byId('native-limits-saved'))
+  } finally { await f.dispose() }
+})
+
+test('native autosave refreshes the revision and preserves an externally changed untouched field', async () => {
+  const f = await fixture()
+  try {
+    f.input('native-max-depth', '3', 'value')
+    f.changeNativeValues({ maxActiveSubagents: 11 })
+    await f.flushTimers()
+    assert.deepEqual(f.calls.nativeWrites, [{ revision: 'native-2', maxDepth: 3, maxActiveSubagents: 11 }])
+    assert.equal(f.byId('native-max-active').props.value, '11')
+  } finally { await f.dispose() }
+})
+
+test('invalid native settings cancel unsent autosaves and never write', async () => {
+  const f = await fixture()
+  try {
+    for (const [id, values] of [['native-max-depth', ['', '-0', '-1', '1.5', '1e2', '9007199254740992']], ['native-max-active', ['', '0', '-1', '1.5']]]) {
+      for (const value of values) {
+        f.input(id, value, 'value')
+        assert.ok(f.byId('native-limits-invalid'))
+        await f.flushTimers()
+      }
+      f.input(id, '2', 'value')
+    }
+    assert.equal(f.calls.nativeWrites.length, 0)
+  } finally { await f.dispose() }
+})
+
+for (const nativeFailure of ['read', 'readonly', 'save', 'conflict', 'readback']) {
+  test(`native autosave failure stays unconfirmed, keeps drafts and redacts host details: ${nativeFailure}`, async () => {
+    const f = await fixture('en', { nativeFailure })
+    try {
+      if (nativeFailure === 'read' || nativeFailure === 'readonly') {
+        assert.equal(f.byId('native-max-depth').props.disabled, true)
+      } else {
+        f.input('native-max-depth', '3', 'value'); await f.flushTimers()
+        assert.equal(f.byId('native-max-depth').props.value, '3')
+        assert.ok(f.byId('native-limits-error'))
+      }
+      assert.equal(nodes(f.page(), node => node.props?.['data-testid'] === 'native-limits-saved').length, 0)
+      assert.doesNotMatch(JSON.stringify(f.page()), /SECRET_TOKEN|\/private\/profile|\[object Object\]/)
+    } finally { await f.dispose() }
+  })
+}
+
 test('unknown/unready settings identity, schema, revision, and refresh failures never become writes or success', async () => {
   for (const describeFailure of ['throw', 'rejected', 'flat', 'readonly', 'document', 'identity', 'slot', 'revision', 'malformed']) {
     const f = await fixture('en', { describeFailure, form: {
@@ -215,4 +344,37 @@ test('unknown/unready settings identity, schema, revision, and refresh failures 
       assert.doesNotMatch(JSON.stringify(f.page()), /SECRET_TOKEN|\/private\/profile|\[object Object\]/)
     } finally { await f.dispose() }
   }
+})
+
+for (const failure of [false, true]) {
+  test(`an older native focus read ${failure ? 'failure' : 'response'} cannot replace a newer snapshot or draft`, async () => {
+    const f = await fixture()
+    try {
+      f.holdNativeRead(); f.focus(); await settle()
+      f.changeNativeValues({ maxDepth: 4 })
+      f.focus(); await settle()
+      assert.equal(f.byId('native-max-depth').props.value, '4')
+      assert.equal(f.byId('native-max-depth').props.disabled, false)
+      f.input('native-max-depth', '', 'value'); f.page()
+      f.releaseNativeRead(failure); await settle()
+      assert.equal(f.byId('native-max-depth').props.value, '', 'late reads never replace an invalid draft')
+      assert.equal(f.byId('native-max-depth').props.disabled, false)
+      assert.ok(f.byId('native-limits-invalid'))
+      assert.equal(nodes(f.page(), node => node.props?.['data-testid'] === 'native-limits-error').length, 0)
+      f.input('native-max-active', '10', 'value'); await f.flushTimers()
+      assert.equal(f.calls.nativeWrites.length, 0, 'a cleared depth must never become a numeric zero through stale data')
+    } finally { await f.dispose() }
+  })
+}
+
+test('an older native read cannot replace a newer snapshot even without edits', async () => {
+  const f = await fixture()
+  try {
+    f.holdNativeRead(); f.focus(); await settle()
+    f.changeNativeValues({ maxDepth: 4 })
+    f.focus(); await settle()
+    f.releaseNativeRead(); await settle()
+    assert.equal(f.byId('native-max-depth').props.value, '4')
+    assert.equal(f.calls.nativeWrites.length, 0)
+  } finally { await f.dispose() }
 })

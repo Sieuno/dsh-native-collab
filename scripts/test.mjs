@@ -6,7 +6,7 @@ const root = fileURLToPath(new URL('../', import.meta.url))
 const tiers = {
   unit: [
     'auto-wake-guard', 'auto-wake-routing', 'auto-wake-delivery', 'interrupt-routing', 'agent-routing', 'child-activity', 'model-source', 'model-selection', 'delegation-choice',
-    'client-status', 'feature-settings', 'locale-coverage', 'managed-runtime', 'preset-adapter', 'startup-declaration',
+    'client-status', 'feature-settings', 'native-subagent-limits', 'locale-coverage', 'managed-runtime', 'preset-adapter', 'startup-declaration',
     'host-compatibility', 'projection-compat', 'release-exports', 'ui-diagnostics', 'ui-locale-and-layout', 'user-docs',
   ],
   sdk: [

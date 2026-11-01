@@ -70,12 +70,12 @@ export const setIdentityRecoveryInternal = Symbol.for('dsh.subagent.setIdentityR
  * Hold an idle direct local continuable child through one identity transition.
  * The callback's signal composes the parent teardown and Agent maintenance lease.
  */
-export function withIdleContinuable(runtime, parent, childId, operation) {
+export function withIdleContinuable(runtime, parent, childId, operation, onStable) {
     const candidate = runtime;
     if (candidate === undefined || typeof candidate[withIdleContinuableInternal] !== 'function') {
         return Promise.reject(new Error('subagent runtime does not support idle identity transitions'));
     }
-    return candidate[withIdleContinuableInternal](parent, childId, operation);
+    return candidate[withIdleContinuableInternal](parent, childId, operation, onStable);
 }
 /** Fail closed when the runtime lacks the identity-transition guard. */
 export function assertNoIdentityTransition(runtime, childId) {

@@ -23,8 +23,9 @@ export async function clientSource({ emitted = false } = {}) {
 export async function clientModule(globals = {}, options = {}) {
   let spec
   runInNewContext(await clientSource(options), {
-    setTimeout, clearTimeout, URLSearchParams, document: { activeElement: null, body: {}, addEventListener() {}, removeEventListener() {} }, ...globals,
-    window: { innerWidth: 1280, innerHeight: 800, addEventListener() {}, removeEventListener() {}, __ModuleLoader__: { load(value) { spec = value } } },
+    setTimeout, clearTimeout, URLSearchParams,
+    document: { activeElement: null, body: {}, addEventListener() {}, removeEventListener() {} }, ...globals,
+    window: { innerWidth: 1280, innerHeight: 800, addEventListener() {}, removeEventListener() {}, ...globals.window, __ModuleLoader__: { load(value) { spec = value } } },
   })
   return spec
 }
@@ -58,10 +59,19 @@ export function clientContext(context) {
   const remote = context.remote
   remote.$mount = async contribution => {
     assert.deepEqual(Array.from(contribution.services, item => item.namespace), ['collabUi'])
-    assert.deepEqual(Array.from(contribution.descriptors, item => item.method), ['status', 'membershipCandidates', 'exchangeMembership'])
+    const methods = ['status', 'membershipCandidates', 'exchangeMembership', 'limits', 'saveLimits']
+    assert.deepEqual(Array.from(contribution.descriptors, item => item.method), methods)
+    const request = contribution.descriptors.find(item => item.method === 'saveLimits').parameters[0]
+    assert.equal(request.wire, 'request')
+    assert.equal(request.source, 'json')
+    assert.equal(request.codec.mode, 'strict')
+    assert.throws(() => request.codec.decode({ revision: 'test', maxDepth: -1, maxActiveSubagents: 8 }), /invalid native limits/)
     const original = remote.collabUi
-    remote.collabUi = Object.fromEntries(['status', 'membershipCandidates', 'exchangeMembership'].map(method => [method,
-      async (...args) => ({ ok: true, value: await original[method](...args) }),
+    remote.collabUi = Object.fromEntries(methods.map(method => [method,
+      async (...args) => {
+        const result = await original[method](...args)
+        return result && typeof result.ok === 'boolean' ? result : { ok: true, value: result }
+      },
     ]))
     return () => { remote.collabUi = original }
   }

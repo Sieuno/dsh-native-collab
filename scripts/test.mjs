@@ -6,12 +6,12 @@ const root = fileURLToPath(new URL('../', import.meta.url))
 const tiers = {
   unit: [
     'auto-wake-guard', 'auto-wake-routing', 'auto-wake-delivery', 'interrupt-routing', 'agent-routing', 'child-activity', 'model-source', 'model-selection', 'delegation-choice',
-    'client-status', 'feature-settings', 'locale-coverage', 'managed-runtime', 'preset-adapter', 'startup-declaration',
-    'team-membership', 'identity-transition-fence', 'identity-transition-manager', 'membership-exchange',
+    'client-status', 'feature-settings', 'native-subagent-limits', 'locale-coverage', 'managed-runtime', 'preset-adapter', 'startup-declaration',
+    'identity-transition-fence', 'identity-transition-manager', 'membership-exchange',
     'host-compatibility', 'projection-compat', 'release-exports', 'ui-diagnostics', 'ui-locale-and-layout', 'user-docs',
   ],
   sdk: [
-    'actual-projection', 'child-guidance', 'collab-ui-status', 'delegation-registration',
+    'actual-projection', 'child-guidance', 'collab-ui-status', 'delegation-registration', 'team-membership',
     'remote-namespace', 'runtime-integration', 'tool-routing-scope',
   ],
   source: ['settings-host-contract'],

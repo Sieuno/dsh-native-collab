@@ -309,6 +309,42 @@ test('Team routing resolves one roster identity before send and never retries a 
   } finally { await harness.dispose() }
 })
 
+test('managed depth and capacity admission read live native limits without a second persisted copy', async () => {
+  const { ActivationPool } = await dist('subagent/activation.js')
+  const ctx = new Context()
+  const native = { options: { id: 'subagent', name: '@deepseek-ai/dsh-subagent', config: { maxDepth: 2, maxActiveSubagents: 2 } } }
+  ctx.provide('loader', { await: () => Promise.resolve(), entries: () => [native] })
+  ctx.provide('pluginManager', { listPlugins: async () => [] })
+  ctx.provide('agents', { get() { return undefined } })
+  try {
+    const ui = ownSnapshot(ctx, {})
+    const runtime = new subagent.SubagentRuntime(ctx, {
+      deliverySelection: true, maxDepth: { get: () => 1 }, maxActiveSubagents: { get: () => 8 },
+    })
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(runtime.resolveMaxDepth(), 2)
+    assert.equal(runtime.resolveMaxDepth(4), 4, 'explicit tool depth still takes precedence')
+    assert.equal(runtime.resolveMaxDepth('provider-managed'), undefined)
+    const currentCapacity = () => runtime.manager.maxActiveSubagents()
+    assert.equal(currentCapacity(), 2, 'the real manager receives the live native reader')
+    const pool = new ActivationPool()
+    const releaseFirst = pool.reserve(currentCapacity())
+    const releaseSecond = pool.reserve(currentCapacity())
+    native.options.config = { maxDepth: 0, maxActiveSubagents: 1 }
+    assert.equal(ui.currentSubagentLimits().maxDepth, 0)
+    assert.equal(runtime.resolveMaxDepth(), 0, 'native zero is not replaced by a default')
+    assert.equal(currentCapacity(), 1)
+    assert.throws(() => pool.reserve(currentCapacity()), error => error.code === 'ACTIVATION_LIMIT_REACHED')
+    releaseFirst()
+    assert.throws(() => pool.reserve(currentCapacity()), error => error.code === 'ACTIVATION_LIMIT_REACHED', 'existing reservations survived lowering the limit')
+    releaseSecond()
+    const releaseAfter = pool.reserve(currentCapacity()); releaseAfter()
+    native.options.config = { maxDepth: -1, maxActiveSubagents: 1 }
+    assert.throws(() => runtime.resolveMaxDepth(), error => error.code === 'maxDepth-invalid')
+    assert.throws(() => currentCapacity(), error => error.code === 'maxDepth-invalid')
+  } finally { await ctx.fiber.dispose() }
+})
+
 test('SDK-only excludes Host packages; host mode resolves Host identity without loading it', async () => {
   if (environment.mode === 'sdk-only') {
     for (const name of ['@deepseek-ai/dsh-settings', '@deepseek-ai/dsh-config-editor', '@deepseek-ai/dsh-app-boot']) {

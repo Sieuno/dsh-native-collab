@@ -40,6 +40,7 @@ export interface MembershipExchangeCandidate {
   readonly label: string
   readonly status: 'running' | 'inactive' | 'unknown'
   readonly reason: MembershipExchangeReason | null
+  /** Most recent server-confirmed operation or current in-memory uncertain request; not proof this is the unique lost reply. */
   readonly recovery: MembershipExchangeRequest | null
 }
 

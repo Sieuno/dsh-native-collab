@@ -29,6 +29,7 @@ new Function('require', 'module', 'exports', compiled.outputText)(name => {
   if (name === './assembly-layout.ts') return layoutModule.exports
   if (name === './managed-runtime.ts') return stubRuntime
   if (name === './membership-ui.ts') return require('../dist/agent-team/membership-ui.js')
+  if (name === './native-subagent-limits.ts') return require('../dist/agent-team/native-subagent-limits.js')
   return require(name)
 }, module, module.exports)
 const { CollabUiService } = module.exports

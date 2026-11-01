@@ -2,18 +2,16 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type {} from '@deepseek-ai/dsh-agent/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type {
-  TeamMemberProjection,
-  TeamTaskView as TeamTask,
-} from '@deepseek-ai/dsh-experimental-agent-team/client'
+// The panel consumes this plugin's projection vocabulary (including departed/v3
+// receipts), not the upstream AgentTeam client's older v2 member phase shape.
+import type { TeamMemberProjection, TeamTaskView as TeamTask } from '../src/types.ts'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import {
   IconChevronDownOutlineRegular,
   IconUserOutlineRegular, IconUsersOutlineRegular, StateDot, Tag, Tooltip,
   useAnchoredPosition, useDismissOnOutsidePointer, type StateDotState,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { NS, type TeamKey } from './locales.ts'
 import css from './TeamAction.module.css'
@@ -45,7 +43,7 @@ type MemberStatus = 'running' | 'inactive' | 'provisioning' | 'failed'
 
 /** Full props of the Team conversation-header action. */
 export type TeamActionProps =
-  PropsRuntime<'conversation.session.header.actions'> & TeamActionInjected & PropsLocale<typeof NS>
+  PropsRuntime<'conversation.session.header.actions'> & TeamActionInjected & { t: Translate }
 
 function statusKey(status: TeamTask['status']): TeamKey {
   switch (status) {
@@ -101,7 +99,7 @@ function TeamMemberRow({
   const summaryRunning = useSessions(state => state.byId[member.id]?.running)
   const status: MemberStatus = member.phase === 'active'
     ? (running ?? summaryRunning) === true ? 'running' : 'inactive'
-    : member.phase
+    : member.phase === 'failed' || member.phase === 'provisioning' ? member.phase : 'inactive'
   const isCurrent = member.id === sessionId
   const highlightCurrent = isCurrent && memberCount > 1
   const inert = isCurrent || status === 'failed' || status === 'provisioning'
@@ -155,7 +153,7 @@ function TeamMemberRow({
 }
 
 /** Task card with a two-line description clamp expanded from a toggle in the meta row. */
-function TaskCard({ task, t }: { task: TeamTask; t: TranslateNS<typeof NS> }) {
+function TaskCard({ task, t }: { task: TeamTask; t: Translate }) {
   const [expanded, setExpanded] = useState(false)
   const [clamped, setClamped] = useState(false)
   const textRef = useRef<HTMLParagraphElement>(null)
@@ -289,7 +287,8 @@ export function TeamAction({
     return () => { document.removeEventListener('keydown', dismiss) }
   }, [open])
 
-  const compact = team !== undefined && team.members.length === 1 && team.tasks.length === 0
+  const activeMembers = team?.members.filter(member => member.phase !== 'departed') ?? []
+  const compact = team !== undefined && activeMembers.length === 1 && team.tasks.length === 0
 
   return (
     <div
@@ -346,14 +345,14 @@ export function TeamAction({
                 <section>
                   <h3>
                     {t('roster')}
-                    {team.members.length > 1 && <span className={css.count}>{team.members.length}</span>}
+                    {activeMembers.length > 1 && <span className={css.count}>{activeMembers.length}</span>}
                   </h3>
                   <div className={css.roster}>
-                    {team.members.map(member => (
+                    {activeMembers.map(member => (
                       <TeamMemberRow
                         key={member.id}
                         member={member}
-                        memberCount={team.members.length}
+                        memberCount={activeMembers.length}
                         sessionId={sessionId}
                         rootSessionId={leadSessionId}
                         useSessions={useSessions}

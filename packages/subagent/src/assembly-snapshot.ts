@@ -88,6 +88,23 @@ export function readAssemblySnapshot(ctx: { get?: (name: string) => unknown } | 
   return isAssemblySnapshot(value) ? value : undefined
 }
 
+/** Read live native limits without freezing a second settings copy in this runtime. */
+export function readCurrentSubagentLimits(ctx: { get?: (name: string) => unknown } | undefined): {
+  readonly maxDepth: number
+  readonly maxActiveSubagents: number
+} | undefined {
+  const service = brandedService(ctx) as { currentSubagentLimits?: () => unknown } | undefined
+  if (typeof service?.currentSubagentLimits !== 'function') return undefined
+  const value = service.currentSubagentLimits()
+  if (value === undefined) return undefined
+  if (typeof value !== 'object' || value === null) throw new Error('native-limits-invalid')
+  const depth = Reflect.get(value, 'maxDepth')
+  const capacity = Reflect.get(value, 'maxActiveSubagents')
+  if (!Number.isSafeInteger(depth) || depth < 0 || Object.is(depth, -0)
+    || !Number.isSafeInteger(capacity) || capacity < 1) throw new Error('native-limits-invalid')
+  return { maxDepth: depth as number, maxActiveSubagents: capacity as number }
+}
+
 /** Fail before `super()` when this Context has no legal captured snapshot. */
 export function readCurrentModelSource(ctx: { get?: (name: string) => unknown } | undefined): 'conversation' | 'settings' | 'all' | undefined {
   const service = brandedService(ctx)

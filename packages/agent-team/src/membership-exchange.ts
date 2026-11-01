@@ -24,9 +24,14 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
-function sameRequest(left: MembershipExchangeRequest, right: MembershipExchangeRequest): boolean {
-  return left.rootId === right.rootId && left.targetId === right.targetId && left.operationId === right.operationId
-    && left.to === right.to && left.name === right.name && left.description === right.description
+function sameOperation(left: MembershipExchangeRequest, right: MembershipExchangeRequest): boolean {
+  return left.rootId === right.rootId && left.targetId === right.targetId && left.operationId === right.operationId && left.to === right.to
+}
+
+function compatibleReplay(pending: MembershipExchangeRequest, replay: MembershipExchangeRequest): boolean {
+  return sameOperation(pending, replay)
+    && (replay.name === undefined || replay.name === pending.name)
+    && (replay.description === undefined || replay.description === pending.description)
 }
 
 /** Private UI port; deliberately absent from the service's named/model operations. */
@@ -34,17 +39,56 @@ export class MembershipExchange implements MembershipUiPort {
   private readonly recovering = new Map<SessionId, MembershipExchangeRequest>()
   private readonly notified = new Map<string, Set<SessionId>>()
   private readonly pendingNotifications = new Map<SessionId, MembershipExchangeRequest>()
+  private readonly flushedOperations = new Map<SessionId, Set<string>>()
+
+  private markFlushed(rootId: SessionId, receipts: Iterable<{ operationId: string }>): void {
+    const ids = this.flushedOperations.get(rootId) ?? new Set<string>()
+    for (const receipt of receipts) ids.add(receipt.operationId)
+    this.flushedOperations.set(rootId, ids)
+  }
 
   /** The committed edge is the durable outbox; the receiver inbox event is its receipt. */
   async recover(root: Agent): Promise<void> {
     if (this.lifecycle.disposed || this.roster.tryMembership(root)?.role !== 'lead') return
+    // Snapshot before flushing: a flush-then-read sequence could observe a new
+    // in-memory receipt that the completed flush did not persist.
+    const snapshot = [...this.journal.state(root).operations]
     await this.ctx.sessions.flush(root.session)
-    for (const receipt of this.journal.state(root).operations) {
-      const request: MembershipExchangeRequest = { rootId: root.id, targetId: receipt.memberId, operationId: receipt.operationId, to: receipt.to }
-      const notification = await this.notify(root, request)
-      if (notification === 'failed') this.pendingNotifications.set(receipt.memberId, request)
-      else if (this.pendingNotifications.get(receipt.memberId)?.operationId === receipt.operationId) this.pendingNotifications.delete(receipt.memberId)
+    this.markFlushed(root.id, snapshot)
+    const latest = new Map<SessionId, { memberId: SessionId; operationId: string; to: 'teammate' | 'subagent' }>()
+    for (const receipt of snapshot) latest.set(receipt.memberId, receipt)
+    const failures: unknown[] = []
+    for (const receipt of latest.values()) {
+      try {
+        const request: MembershipExchangeRequest = { rootId: root.id, targetId: receipt.memberId, operationId: receipt.operationId, to: receipt.to }
+        let stableReceipt = false
+        const reconciled = await withIdleContinuable(this.ctx.subagents, root, receipt.memberId, async (child, signal) => {
+          signal.throwIfAborted()
+          const current = [...this.journal.state(root).operations].reverse().find(value => value.memberId === receipt.memberId)
+          if (current?.operationId !== receipt.operationId || current.to !== receipt.to) return false
+          // The durable edge and exact current operation are checked while the
+          // same manager fence/idle maintenance lease used by conversion is held.
+          this.reconcile(child)
+          stableReceipt = true
+          return true
+        }, (_child, confirmed) => {
+          if (confirmed && stableReceipt) {
+            setIdentityRecovery(this.ctx.subagents, receipt.memberId, false)
+            if (this.recovering.get(receipt.memberId)?.operationId === receipt.operationId) this.recovering.delete(receipt.memberId)
+          }
+        })
+        if (!reconciled) continue
+        const notification = await this.notify(root, request)
+        if (notification === 'failed') this.pendingNotifications.set(receipt.memberId, request)
+        else if (this.pendingNotifications.get(receipt.memberId)?.operationId === receipt.operationId) this.pendingNotifications.delete(receipt.memberId)
+      } catch (error: unknown) {
+        // One busy or inconsistent child must not block independent durable
+        // receipts. Its Manager guard is left untouched and failures surface
+        // together after the remaining children have been attempted.
+        failures.push(error)
+      }
     }
+    if (failures.length > 0) throw new AggregateError(failures, 'Agent Teams receipt recovery incomplete')
   }
 
   constructor(
@@ -60,7 +104,15 @@ export class MembershipExchange implements MembershipUiPort {
     const rows: MembershipExchangeCandidate[] = []
     for (const root of this.ctx.agents.list()) {
       if (this.roster.tryMembership(root)?.role !== 'lead') continue
+      const stateBeforeFlush = this.journal.state(root)
+      const confirmed = this.flushedOperations.get(root.id) ?? new Set<string>()
+      const unconfirmed = stateBeforeFlush.operations.filter(receipt => !confirmed.has(receipt.operationId))
+      if (unconfirmed.length > 0) {
+        await this.ctx.sessions.flush(root.session)
+        this.markFlushed(root.id, unconfirmed)
+      }
       const state = this.journal.state(root)
+      const receiptSnapshot = state.operations.filter(receipt => this.flushedOperations.get(root.id)?.has(receipt.operationId))
       for (const entry of await this.ctx.subagents.listChildren(root.id, this.lifecycle.signal)) {
         if (entry.mode !== 'continuable') continue
         const member = state.members.find(value => value.id === entry.id)
@@ -70,11 +122,16 @@ export class MembershipExchange implements MembershipUiPort {
         try { assertNoIdentityTransition(this.ctx.subagents, entry.id) }
         catch (error: unknown) { reason = membershipExchangeReason(error) }
         if (live !== undefined && live.status !== 'idle') reason = 'busy'
+        const receipt = [...receiptSnapshot].reverse().find(value => value.memberId === entry.id)
+        const durableRecovery: MembershipExchangeRequest | null = receipt === undefined ? null : {
+          rootId: root.id, targetId: entry.id, operationId: receipt.operationId, to: receipt.to,
+        }
         rows.push({
           rootId: root.id, targetId: entry.id,
           role: member?.phase === 'active' ? 'teammate' : 'subagent',
           name: member?.name ?? '', label: entry.label,
-          status: live?.status === 'running' ? 'running' : 'inactive', reason, recovery: this.recovering.get(entry.id) ?? this.pendingNotifications.get(entry.id) ?? null,
+          status: live?.status === 'running' ? 'running' : 'inactive', reason,
+          recovery: this.recovering.get(entry.id) ?? this.pendingNotifications.get(entry.id) ?? durableRecovery,
         })
       }
     }
@@ -94,24 +151,45 @@ export class MembershipExchange implements MembershipUiPort {
     const targetId = brandString<SessionId>(request.targetId)
     if (root === undefined || this.roster.tryMembership(root)?.role !== 'lead' || root.id === targetId) return result('rejected', 'not-found')
     const pending = this.recovering.get(targetId)
-    if (pending !== undefined && !sameRequest(pending, request)) return result('recovery-required', 'inconsistent-state')
+    if (pending !== undefined && !compatibleReplay(pending, request)) return result('recovery-required', 'inconsistent-state')
+    const admitted = pending ?? request
     try {
+      try {
+        assertNoIdentityTransition(this.ctx.subagents, targetId)
+      } catch (error: unknown) {
+        const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
+        if (code !== 'IDENTITY_RECOVERY_REQUIRED') return result('recovery-required', membershipExchangeReason(error))
+        if (pending === undefined) {
+          // A rebuilt Coordinator has lost its in-memory request. Permit only
+          // the exact operation whose receipt this Manager is guarding, and
+          // first make that snapshot durable before retrying it.
+          const snapshot = [...this.journal.state(root).operations]
+          const receipt = snapshot.find(value => value.operationId === request.operationId
+            && value.memberId === targetId && value.to === request.to)
+          if (receipt === undefined) return result('recovery-required', 'inconsistent-state')
+          await this.ctx.sessions.flush(root.session)
+          this.markFlushed(root.id, snapshot)
+          const current = [...this.journal.state(root).operations].reverse().find(value => value.memberId === targetId)
+          if (current?.operationId !== receipt.operationId || current.to !== receipt.to) return result('recovery-required', 'inconsistent-state')
+        }
+      }
+      let reconciliationReady = false
       const converted = await withIdleContinuable(this.ctx.subagents, root, targetId, async (child, signal) => {
         signal.throwIfAborted()
         this.lifecycle.signal.throwIfAborted()
-        this.recovering.set(targetId, request)
+        this.recovering.set(targetId, admitted)
         setIdentityRecovery(this.ctx.subagents, targetId, true)
         let committed = false
         try {
-          const receipt = await this.roster.convertMembership(root, child, request)
+          const receipt = await this.roster.convertMembership(root, child, admitted)
           committed = true
           // A same-operation receipt may follow append-then-flush failure. A
           // receipt in memory is not evidence that persistence succeeded.
           await this.ctx.sessions.flush(root.session)
+          this.markFlushed(root.id, [receipt])
           signal.throwIfAborted()
           this.reconcile(child)
-          // Keep the recovery guard until the manager's final maintenance checks
-          // have passed as well; a durable edge cannot be rolled back by an abort.
+          reconciliationReady = true
           return result(receipt.replayed ? 'unchanged' : 'converted', null)
         } catch (error: unknown) {
           const uncertain = pending !== undefined || committed || (typeof error === 'object' && error !== null && 'code' in error && error.code === 'TEAM_MEMBERSHIP_COMMIT_UNCERTAIN')
@@ -121,10 +199,13 @@ export class MembershipExchange implements MembershipUiPort {
           }
           return result(uncertain ? 'recovery-required' : 'rejected', membershipExchangeReason(error))
         }
+      }, (_child, stableResult) => {
+        if (reconciliationReady && (stableResult.status === 'converted' || stableResult.status === 'unchanged')) {
+          setIdentityRecovery(this.ctx.subagents, targetId, false)
+          if (this.recovering.get(targetId)?.operationId === request.operationId) this.recovering.delete(targetId)
+        }
       })
       if (converted.status === 'converted' || converted.status === 'unchanged') {
-        setIdentityRecovery(this.ctx.subagents, targetId, false)
-        this.recovering.delete(targetId)
         const notification = await this.notify(root, request)
         if (notification === 'failed') this.pendingNotifications.set(targetId, request)
         else this.pendingNotifications.delete(targetId)

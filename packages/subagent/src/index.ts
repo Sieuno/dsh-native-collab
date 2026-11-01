@@ -27,7 +27,7 @@
  *
  * @module @deepseek-ai/dsh-subagent
  */
-import { readChildMessageFlags, requireAssemblySnapshot, resolveCommunicationAdmission } from './assembly-snapshot.ts'
+import { readChildMessageFlags, readCurrentSubagentLimits, requireAssemblySnapshot, resolveCommunicationAdmission } from './assembly-snapshot.ts'
 import { resolveChildMessagePolicy } from './child-message-policy.ts'
 import { AutoWakeGuard, type AutoWakeReservation } from './auto-wake-guard.ts'
 import { foldSubagentDescriptor } from './descriptor.ts'
@@ -288,7 +288,7 @@ export class SubagentRuntime extends TypertRemoteService {
         prepareContinuable: (name, request) => this.prepareContinuable(name, request),
         observeActivation: (provider, childId, parent) => this.observeActivation(provider, childId, parent),
         reserveAutomatic: (sender, targetId) => this.reserveAutomaticInteraction(sender, targetId),
-      }, () => this.config.maxActiveSubagents.get(), resolveChildMessages)
+      }, () => readCurrentSubagentLimits(this.ctx)?.maxActiveSubagents ?? this.config.maxActiveSubagents.get(), resolveChildMessages)
       this.manager = manager
       // Inbox splice runs at acceptance, before a later model request. Initial
       // delegation uses agent-message attribution, never synthetic human input.
@@ -379,7 +379,7 @@ export class SubagentRuntime extends TypertRemoteService {
   resolveMaxDepth(configured?: number | 'provider-managed'): number | undefined {
     if (configured === 'provider-managed') return undefined
     if (configured !== undefined) return configured
-    const depth = this.config.maxDepth.get()
+    const depth = readCurrentSubagentLimits(this.ctx)?.maxDepth ?? this.config.maxDepth.get()
     assertSubagentMaxDepth(depth)
     return depth
   }
@@ -540,8 +540,9 @@ export class SubagentRuntime extends TypertRemoteService {
     parent: Agent,
     childId: SessionId,
     operation: (child: Agent, signal: AbortSignal) => Promise<T>,
+    onStable?: (child: Agent, value: T) => void,
   ): Promise<T> {
-    return this.requireManager().withIdleContinuable(parent, childId, operation)
+    return this.requireManager().withIdleContinuable(parent, childId, operation, onStable)
   }
 
   /** Internal Team caller guard for transition and durable recovery state. */

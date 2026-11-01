@@ -70,6 +70,18 @@ test('actual Manager lease raises fence before waiting on the existing child loc
   release(); await held
   assert.equal(await lease, 42); h.clean()
 })
+test('actual Manager stable callback runs only after idle validation while fence and child lock remain held', async () => {
+  const h = fixture()
+  const value = await h.manager.withIdleContinuable(h.parent, 'child', async () => 'receipt', (child, result) => {
+    assert.equal(child, h.child); assert.equal(result, 'receipt')
+    assert.equal(h.manager.identityTransitions.has('child'), true)
+    assert.equal(h.manager.locks.tails.has('child'), true)
+    h.calls.push('stable')
+  })
+  assert.equal(value, 'receipt')
+  assert.ok(h.calls.indexOf('maintenance') < h.calls.indexOf('stable'))
+  h.clean()
+})
 test('actual Manager rejects running, pending inbox and descendants without dropping accepted input', async () => {
   for (const mode of ['running', 'inbox', 'descendant']) {
     const h = fixture()
@@ -84,12 +96,14 @@ test('actual Manager rejects running, pending inbox and descendants without drop
 test('actual Manager aborts on concurrent input/turn/descendant activity and keeps input intact', async () => {
   for (const mode of ['input', 'turn', 'descendant']) {
     const h = fixture()
+    let stable = false
     await assert.rejects(h.manager.withIdleContinuable(h.parent, 'child', async (_child, signal) => {
       if (mode === 'input') { h.child.inbox.nextTurn.push({ id: 'accepted' }); h.emit('agent/inbox/inserted', { agent: h.child }) }
       if (mode === 'turn') h.emit('session/event', h.child.session, { type: 'turn/start' })
       if (mode === 'descendant') h.manager.childActivity()
       assert.equal(signal.aborted, true)
-    }), { code: 'IDENTITY_TRANSITION_STALE' })
+    }, () => { stable = true }), { code: 'IDENTITY_TRANSITION_STALE' })
+    assert.equal(stable, false, 'an unstable maintenance attempt cannot run its stable callback')
     if (mode === 'input') assert.equal(h.child.inbox.nextTurn[0].id, 'accepted')
     h.clean()
   }

@@ -128,6 +128,7 @@ interface IdentityTransitionRuntime {
     parent: Agent,
     childId: SessionId,
     operation: (child: Agent, signal: AbortSignal) => Promise<T>,
+    onStable?: (child: Agent, value: T) => void,
   ): Promise<T>
   [assertNoIdentityTransitionInternal](childId: SessionId): void
   [captureIdentityTransitionGenerationInternal](childId: SessionId): number
@@ -144,12 +145,13 @@ export function withIdleContinuable<T>(
   parent: Agent,
   childId: SessionId,
   operation: (child: Agent, signal: AbortSignal) => Promise<T>,
+  onStable?: (child: Agent, value: T) => void,
 ): Promise<T> {
   const candidate = runtime as IdentityTransitionRuntime | undefined
   if (candidate === undefined || typeof candidate[withIdleContinuableInternal] !== 'function') {
     return Promise.reject(new Error('subagent runtime does not support idle identity transitions'))
   }
-  return candidate[withIdleContinuableInternal](parent, childId, operation)
+  return candidate[withIdleContinuableInternal](parent, childId, operation, onStable)
 }
 
 /** Fail closed when the runtime lacks the identity-transition guard. */

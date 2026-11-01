@@ -39,7 +39,7 @@ const files = await walk(join(root, 'packages'))
 const options = {
   noEmit: true, strict: true, skipLibCheck: true,
   target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext,
-  allowImportingTsExtensions: true, lib: ['lib.es2024.d.ts', 'lib.esnext.disposable.d.ts', 'lib.dom.d.ts'],
+  jsx: ts.JsxEmit.Preserve, allowImportingTsExtensions: true, lib: ['lib.es2024.d.ts', 'lib.esnext.disposable.d.ts', 'lib.dom.d.ts'],
   types: ['node'], ...(typeRoot ? { typeRoots: [typeRoot] } : {}), paths,
 }
 const program = ts.createProgram(files, options)

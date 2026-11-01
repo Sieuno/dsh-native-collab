@@ -417,6 +417,7 @@ export class SubagentManager {
     parent: Agent,
     childId: SessionId,
     operation: (child: Agent, signal: AbortSignal) => Promise<T>,
+    onStable?: (child: Agent, value: T) => void,
   ): Promise<T> {
     this.assertAdmitting(parent)
     this.assertActivityCaller(parent)
@@ -444,7 +445,7 @@ export class SubagentManager {
         // Historical unloaded descendants keep the same parent SessionId and
         // do not prevent a role-only transition. Live descendants/preparations
         // are excluded by assertIdentityTransitionCandidate below.
-        return await child.runMaintenance(async (maintenanceSignal) => {
+        const value = await child.runMaintenance(async (maintenanceSignal) => {
           const inputAbort = new AbortController()
           const stopInbox = child.ctx.on('agent/inbox/inserted', ({ agent }) => {
             if (agent === child) inputAbort.abort(new SubagentError('input arrived during identity transition', 'IDENTITY_TRANSITION_STALE'))
@@ -466,10 +467,10 @@ export class SubagentManager {
           try {
             signal.throwIfAborted()
             this.assertIdentityTransitionCandidate(parent, childId, local, resumed === local)
-            const value = await operation(child, signal)
+            const result = await operation(child, signal)
             signal.throwIfAborted()
             this.assertIdentityTransitionCandidate(parent, childId, local, resumed === local)
-            return value
+            return result
           } finally {
             stopInbox()
             stopStatus()
@@ -477,6 +478,10 @@ export class SubagentManager {
             stopChildActivity()
           }
         })
+        // Runs only after the complete idle-maintenance lease succeeds, while
+        // the identity fence and child lock are still held.
+        onStable?.(child, value)
+        return value
       })
     } finally {
       if (this.identityTransitionControllers.get(childId) === transitionController) {

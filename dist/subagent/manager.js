@@ -354,7 +354,7 @@ export class SubagentManager {
      * the caller commits a durable identity transition. The transition fence is
      * raised synchronously before any asynchronous query or lock acquisition.
      */
-    async withIdleContinuable(parent, childId, operation) {
+    async withIdleContinuable(parent, childId, operation, onStable) {
         this.assertAdmitting(parent);
         this.assertActivityCaller(parent);
         const releaseTransition = this.identityTransitions.begin(childId, parent);
@@ -381,7 +381,7 @@ export class SubagentManager {
                 // Historical unloaded descendants keep the same parent SessionId and
                 // do not prevent a role-only transition. Live descendants/preparations
                 // are excluded by assertIdentityTransitionCandidate below.
-                return await child.runMaintenance(async (maintenanceSignal) => {
+                const value = await child.runMaintenance(async (maintenanceSignal) => {
                     const inputAbort = new AbortController();
                     const stopInbox = child.ctx.on('agent/inbox/inserted', ({ agent }) => {
                         if (agent === child)
@@ -405,10 +405,10 @@ export class SubagentManager {
                     try {
                         signal.throwIfAborted();
                         this.assertIdentityTransitionCandidate(parent, childId, local, resumed === local);
-                        const value = await operation(child, signal);
+                        const result = await operation(child, signal);
                         signal.throwIfAborted();
                         this.assertIdentityTransitionCandidate(parent, childId, local, resumed === local);
-                        return value;
+                        return result;
                     }
                     finally {
                         stopInbox();
@@ -417,6 +417,10 @@ export class SubagentManager {
                         stopChildActivity();
                     }
                 });
+                // Runs only after the complete idle-maintenance lease succeeds, while
+                // the identity fence and child lock are still held.
+                onStable?.(child, value);
+                return value;
             });
         }
         finally {

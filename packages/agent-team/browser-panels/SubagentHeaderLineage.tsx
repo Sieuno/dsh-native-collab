@@ -9,7 +9,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconRefreshOutlineRegular, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-token-meter/client'
@@ -47,7 +47,7 @@ interface MembershipContext {
 
 /** Full props for the session-header lineage renderer. */
 export type SubagentHeaderLineageProps =
-  PropsRuntime<'conversation.session.header.lineage'> & SubagentCatalogInjected & MembershipContext & PropsLocale<typeof NS>
+  PropsRuntime<'conversation.session.header.lineage'> & SubagentCatalogInjected & MembershipContext & { t: Translate }
 
 interface CatalogRowsProps {
   parentSessionId: SessionId
@@ -73,7 +73,7 @@ function treeItems(root: HTMLDivElement | null): HTMLElement[] {
 }
 
 /** Compact token count shared in shape with the conversation stats strip. */
-function formatTokens(value: number, t: TranslateNS<typeof NS>): string {
+function formatTokens(value: number, t: Translate): string {
   const scaled = (next: number): string => next >= 100
     ? String(Math.round(next))
     : String(Math.round(next * 10) / 10)
@@ -133,7 +133,7 @@ function splitDuration(ms: number): DurationParts {
 }
 
 /** Format a duration with decreasing visual precision at larger scales. */
-function formatDuration(ms: number, t: TranslateNS<typeof NS>): string {
+function formatDuration(ms: number, t: Translate): string {
   const { seconds, minutes, hours, days, totalMinutes, totalHours } = splitDuration(ms)
   if (days >= 365) {
     const years = Math.floor(days / 365)
@@ -171,7 +171,7 @@ function formatDuration(ms: number, t: TranslateNS<typeof NS>): string {
 }
 
 /** Preserve exact whole seconds for hover and accessible naming. */
-function formatExactDuration(ms: number, t: TranslateNS<typeof NS>): string {
+function formatExactDuration(ms: number, t: Translate): string {
   const { seconds, minutes, hours, days } = splitDuration(ms)
   return days === 0
     ? formatDuration(ms, t)
@@ -207,7 +207,7 @@ function SubagentSwitcherIcon() {
 }
 
 /** Render catalog loading without inventing child membership. */
-function CatalogLoadingRows({ t }: { t: TranslateNS<typeof NS> }) {
+function CatalogLoadingRows({ t }: { t: Translate }) {
   return <div className={css.notice}>{t('loading.label')}</div>
 }
 
@@ -220,7 +220,7 @@ function isKnownLeaf(catalog: SubagentCatalogSnapshot | undefined): boolean {
 function CatalogRows({
   parentSessionId, currentSessionId, catalog, catalogs, summaries, expanded, level,
   openChild, openChildAside, refreshProjection, toggleBranch, closeCatalog, membership, membershipT, t,
-}: CatalogRowsProps & { t: TranslateNS<typeof NS> }) {
+}: CatalogRowsProps & { t: Translate }) {
   const [now, setNow] = useState(() => Date.now())
   const running = catalog.entries.some(entry => entry.activity === 'running')
   useEffect(() => {
@@ -448,7 +448,7 @@ interface CatalogDropdownSharedProps extends SubagentCatalogInjected, Membership
   rootSessionId: SessionId
   useSessions: SubagentHeaderLineageProps['useSessions']
   useSessionStatus: SubagentHeaderLineageProps['useSessionStatus']
-  t: TranslateNS<typeof NS>
+  t: Translate
 }
 
 type CatalogDropdownProps = CatalogDropdownSharedProps & (
@@ -789,7 +789,7 @@ function CatalogDropdown({
 
 /** Full props for the root-session catalog entry in the header actions band. */
 export type SubagentCatalogActionProps =
-  PropsRuntime<'conversation.session.header.actions'> & SubagentCatalogInjected & MembershipContext & PropsLocale<typeof NS>
+  PropsRuntime<'conversation.session.header.actions'> & SubagentCatalogInjected & MembershipContext & { t: Translate }
 
 /**
  * Session-header catalog action for root sessions: the descendant count and

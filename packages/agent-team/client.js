@@ -177,6 +177,26 @@ window.__ModuleLoader__.load({
       return { ...value }
     }
     const membershipSchema = parse => () => ({ parse })
+    function limitsValues(value) {
+      if (!isPlainObject(value)) strictFailure('invalid native limits')
+      exactKeys(value, ['maxDepth', 'maxActiveSubagents'])
+      if (!Number.isSafeInteger(value.maxDepth) || value.maxDepth < 0 || Object.is(value.maxDepth, -0)
+        || !Number.isSafeInteger(value.maxActiveSubagents) || value.maxActiveSubagents < 1) strictFailure('invalid native limits')
+      return { maxDepth: value.maxDepth, maxActiveSubagents: value.maxActiveSubagents }
+    }
+    function limitsViewSchema() { return { parse(value) {
+      if (!isPlainObject(value)) strictFailure('invalid native limits view')
+      exactKeys(value, ['values', 'revision', 'writable'], ['error'])
+      if (typeof value.revision !== 'string' || !value.revision || value.revision.length > 256 || typeof value.writable !== 'boolean'
+        || value.error !== undefined && typeof value.error !== 'string') strictFailure('invalid native limits view')
+      return { ...value, values: limitsValues(value.values) }
+    } } }
+    function limitsRequestSchema() { return { parse(value) {
+      if (!isPlainObject(value)) strictFailure('invalid native limits request')
+      exactKeys(value, ['revision', 'maxDepth', 'maxActiveSubagents'])
+      if (typeof value.revision !== 'string' || !value.revision || value.revision.length > 256) strictFailure('invalid native limits revision')
+      return { revision: value.revision, ...limitsValues({ maxDepth: value.maxDepth, maxActiveSubagents: value.maxActiveSubagents }) }
+    } } }
     const REMOTE = {
       package: PACKAGE,
       services: [{ namespace: 'collabUi' }],
@@ -193,6 +213,15 @@ window.__ModuleLoader__.load({
           id: PACKAGE + '#collabUi/exchangeMembership', service: 'collabUi', namespace: 'collabUi', method: 'exchangeMembership',
           invocation: { kind: 'direct' }, parameters: [{ name: 'request', wire: 'request', source: 'json', codec: strictCodec(PACKAGE + '/membership-ui#MembershipExchangeRequest', membershipSchema(parseExchangeRequest)) }],
           result: strictCodec(PACKAGE + '/membership-ui#MembershipExchangeResult', membershipSchema(parseExchangeResult)),
+        },
+        {
+          id: `${PACKAGE}#collabUi/limits`, service: 'collabUi', namespace: 'collabUi', method: 'limits',
+          invocation: { kind: 'direct' }, parameters: [], result: strictCodec(`${PACKAGE}/native-subagent-limits#LimitsView`, limitsViewSchema),
+        },
+        {
+          id: `${PACKAGE}#collabUi/saveLimits`, service: 'collabUi', namespace: 'collabUi', method: 'saveLimits',
+          invocation: { kind: 'direct' }, parameters: [{ name: 'request', wire: 'request', source: 'json', codec: strictCodec(`${PACKAGE}/native-subagent-limits#LimitsRequest`, limitsRequestSchema) }],
+          result: strictCodec(`${PACKAGE}/native-subagent-limits#LimitsView`, limitsViewSchema),
         },
       ],
     }
@@ -331,7 +360,102 @@ window.__ModuleLoader__.load({
       if (!ops.length) return { wrote: false, reason: 'empty' }
       return commitViaVerifiedSettings(settings, ops, patch)
     }
-    function EnhancementPage({ t, view, form, readStatus, settings, subject }) {
+    function NativeLimitsPage({ t, readLimits, writeLimits }) {
+      const [state, setState] = React.useState({ view: null, depth: '', capacity: '', loading: true, saving: false, pending: false, error: null, saved: false, edit: 0 })
+      const alive = React.useRef(true), dirty = React.useRef(new Map()), queue = React.useRef(null), draining = React.useRef(false)
+      const sequence = React.useRef(0), draft = React.useRef({ depth: '', capacity: '' }), loadVersion = React.useRef(0)
+      const fields = { depth: 'maxDepth', capacity: 'maxActiveSubagents' }
+      const integer = (text, minimum) => /^(0|[1-9]\d*)$/.test(text) && Number.isSafeInteger(Number(text)) && Number(text) >= minimum
+      const validDraft = () => integer(draft.current.depth, 0) && integer(draft.current.capacity, 1)
+      const load = async () => {
+        if (dirty.current.size || draining.current) return
+        const version = ++loadVersion.current, editSequence = sequence.current
+        const current = () => alive.current && version === loadVersion.current
+        const pristine = () => sequence.current === editSequence && !dirty.current.size && !draining.current
+        setState(old => ({ ...old, loading: true, error: null, saved: false }))
+        try {
+          const view = limitsViewSchema().parse(await readLimits())
+          if (!current()) return
+          // Focus reads may overlap; only the latest may apply, and never over a draft.
+          if (!pristine()) { setState(old => ({ ...old, loading: false })); return }
+          draft.current = { depth: String(view.values.maxDepth), capacity: String(view.values.maxActiveSubagents) }
+          setState(old => ({ ...old, ...draft.current, view, loading: false }))
+        } catch {
+          if (current()) setState(old => pristine() ? { ...old, view: null, loading: false, error: 'unavailable' } : { ...old, loading: false })
+        }
+      }
+      React.useEffect(() => {
+        alive.current = true
+        void load()
+        const onFocus = () => { void load() }
+        window.addEventListener?.('focus', onFocus)
+        return () => { alive.current = false; loadVersion.current++; queue.current = null; window.removeEventListener?.('focus', onFocus) }
+      }, [readLimits])
+      const drain = async () => {
+        if (draining.current) return
+        draining.current = true
+        try {
+          while (queue.current && alive.current) {
+            const task = queue.current; queue.current = null
+            if (task.sequence !== sequence.current || !validDraft()) continue
+            setState(old => ({ ...old, saving: true, pending: false, error: null, saved: false }))
+            try {
+              // Refresh the revision and preserve the sibling field if another editor changed it.
+              const fresh = limitsViewSchema().parse(await readLimits())
+              if (!alive.current || task.sequence !== sequence.current || !validDraft()) continue
+              if (!fresh.writable) throw new Error('native-limits-readonly')
+              const changed = [...task.fields].filter(([field, edit]) => dirty.current.get(field)?.version === edit.version)
+              if (!changed.length) continue
+              const values = { ...fresh.values }
+              for (const [field, edit] of changed) values[fields[field]] = Number(edit.text)
+              const view = limitsViewSchema().parse(await writeLimits({ revision: fresh.revision, ...values }))
+              if (view.values.maxDepth !== values.maxDepth || view.values.maxActiveSubagents !== values.maxActiveSubagents) throw new Error('native-limits-unconfirmed')
+              if (!alive.current) return
+              for (const [field, edit] of task.fields) if (dirty.current.get(field)?.version === edit.version) dirty.current.delete(field)
+              for (const [field, key] of Object.entries(fields)) if (!dirty.current.has(field)) draft.current[field] = String(view.values[key])
+              setState(old => ({ ...old, ...draft.current, view, saved: dirty.current.size === 0, error: null }))
+            } catch (error) {
+              if (alive.current && task.sequence === sequence.current) {
+                const conflict = error?.code === 'native-limits-conflict' || error?.message === 'native-limits-conflict'
+                setState(old => ({ ...old, error: conflict ? 'conflict' : error?.message === 'native-limits-readonly' ? 'readonly' : 'saveFailed', saved: false }))
+              }
+            }
+          }
+        } finally { draining.current = false; if (alive.current) setState(old => ({ ...old, saving: false })) }
+      }
+      React.useEffect(() => {
+        if (!dirty.current.size || !validDraft() || !state.view?.writable) { queue.current = null; return undefined }
+        const timer = setTimeout(() => {
+          queue.current = { sequence: sequence.current, fields: new Map(dirty.current) }
+          void drain()
+        }, 350)
+        return () => clearTimeout(timer)
+      }, [state.edit])
+      const edit = (field, value) => {
+        draft.current = { ...draft.current, [field]: value }
+        const version = ++sequence.current
+        dirty.current.set(field, { text: value, version })
+        queue.current = null
+        setState(old => ({ ...old, [field]: value, edit: version, pending: validDraft(), error: null, saved: false }))
+      }
+      const valid = integer(state.depth, 0) && integer(state.capacity, 1)
+      const locked = state.loading || state.view?.writable !== true
+      const input = (field, id, minimum) => h('p', { key: field }, h('label', { htmlFor: 'collab-' + id }, [t('limits.' + field), h('input', {
+        id: 'collab-' + id, key: 'input', type: 'number', min: minimum, max: Number.MAX_SAFE_INTEGER, step: 1, value: state[field],
+        disabled: locked, 'data-testid': id, onChange: event => { if (!locked) edit(field, event.target.value) },
+      })]))
+      return h('fieldset', { 'data-testid': 'native-limits', 'aria-busy': state.loading || state.saving }, [
+        h('legend', { key: 'legend' }, t('limits.title')), h('p', { key: 'help' }, t('limits.help')),
+        input('depth', 'native-max-depth', 0), input('capacity', 'native-max-active', 1),
+        state.loading ? h('p', { key: 'loading', role: 'status' }, t('loading')) : null,
+        !state.loading && state.view && !valid ? h('p', { key: 'invalid', role: 'alert', 'data-testid': 'native-limits-invalid' }, t('limits.invalid')) : null,
+        !state.loading && state.view?.writable === false ? h('p', { key: 'readonly', role: 'alert' }, t('limits.readonly')) : null,
+        state.error ? h('p', { key: 'error', role: 'alert', 'data-testid': 'native-limits-error' }, t('limits.' + state.error)) : null,
+        !state.error && (state.saving || state.pending) ? h('p', { key: 'saving', role: 'status', 'data-testid': 'native-limits-saving' }, t('autoSaving')) : null,
+        state.saved ? h('p', { key: 'saved', role: 'status', 'data-testid': 'native-limits-saved' }, t('limits.saved')) : null,
+      ])
+    }
+    function EnhancementPage({ t, view, form, readStatus, settings, subject, readLimits, writeLimits }) {
       if (subject?.row?.rowId && subject.row.rowId !== CONTROL_ENTRY_ID) return null
       if (view === 'summary') return t('settingsSummary')
       if (view !== 'page') return null
@@ -459,6 +583,7 @@ window.__ModuleLoader__.load({
           h('p', { key: 'message' }, t(settingsLoading ? 'settingsLoading' : 'settingsUnavailable')),
           !settingsLoading ? h('p', { key: 'reason' }, t('write.' + settingsReason)) : null,
         ]) : null,
+        h(NativeLimitsPage, { key: 'native-limits', t, readLimits, writeLimits }),
         h('fieldset', { key: 'communication', 'data-testid': 'communication-feature' }, [
           h('legend', { key: 'legend' }, t('communicationTitle')),
           checkbox('communicationEnhancement', 'switch-communication'),
@@ -555,22 +680,27 @@ window.__ModuleLoader__.load({
         ]) : null,
       ])
     }
+    const acknowledgedMembershipReceipts = new Set()
+    function membershipReceiptKey(request) { return JSON.stringify([request.rootId, request.targetId, request.operationId]) }
     function useMembershipConversion(api) {
       const [state, setState] = React.useState({ pending: false, result: null, error: false, retry: null })
       const busy = React.useRef(false), alive = React.useRef(true)
       React.useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
       const convert = async (row, name, retryRequest = null) => {
-        if (busy.current || row.status !== 'inactive' || (row.reason !== null && row.recovery === null)) return null
-        const request = retryRequest ?? row.recovery ?? {
+        if (busy.current || row.status !== 'inactive' || (row.reason !== null && row.recovery === null && retryRequest === null)) return null
+        const request = retryRequest ?? {
           rootId: row.rootId, targetId: row.targetId, to: row.role === 'teammate' ? 'subagent' : 'teammate',
           operationId: 'membership-' + (globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)),
           ...(row.role === 'subagent' ? { name: name.trim() } : {}),
         }
         busy.current = true
-        setState(previous => ({ ...previous, pending: true, result: null, error: false }))
+        setState(previous => ({ ...previous, pending: true, result: null, error: false, retry: request }))
         try {
           const result = await api.convert(request)
-          if (alive.current) setState({ pending: false, result, error: false, retry: result.status === 'recovery-required' ? request : null })
+          const completed = result.status === 'converted' || result.status === 'unchanged'
+          if (completed) acknowledgedMembershipReceipts.add(membershipReceiptKey(request))
+          if (alive.current) setState({ pending: false, result, error: false,
+            retry: result.status === 'recovery-required' ? request : null })
           return result
         } catch {
           if (alive.current) setState({ pending: false, result: null, error: true, retry: request })
@@ -600,7 +730,7 @@ window.__ModuleLoader__.load({
       return h(Modal, { open: true, title: t('exchange.join'), closeLabel: t('modalCancel'), onClose: close,
         footer: [h(Button, { key: 'cancel', disabled: state.pending, onClick: close }, t('modalCancel')),
           h(Button, { key: 'confirm', disabled: state.pending || !name.trim(), onClick: () => { void submit() } },
-            t(state.retry || row.recovery ? 'exchange.retry' : 'exchange.join'))] },
+            t(state.retry ? 'exchange.retry' : 'exchange.join'))] },
         h('form', { onSubmit: submit, 'data-testid': 'membership-join-form' }, [
           h('label', { key: 'name', style: { display: 'flex', flexDirection: 'column', gap: 8 } }, [t('exchange.name'),
             h('input', { value: name, maxLength: 128, 'data-modal-autofocus': true, disabled: state.pending || state.retry !== null || row.recovery !== null,
@@ -610,13 +740,14 @@ window.__ModuleLoader__.load({
     }
     function MembershipRowAction({ t, api, rootId, targetId, expectedRole }) {
       const [candidate, setCandidate] = React.useState({ loading: true, row: null, error: false })
-      const { state, busy, convert } = useMembershipConversion(api)
+      const { state, busy, convert } = useMembershipConversion(api, rootId, targetId)
       React.useEffect(() => {
         let cancelled = false, timer
         const refresh = async () => {
           if (!busy.current) try {
             const rows = await api.candidates()
-            const row = rows.find(item => item.rootId === rootId && item.targetId === targetId && item.role === expectedRole) ?? null
+            const found = rows.find(item => item.rootId === rootId && item.targetId === targetId) ?? null
+            const row = found && (found.role === expectedRole || found.recovery !== null) ? found : null
             if (!cancelled) setCandidate({ loading: false, row, error: false })
           } catch { if (!cancelled) setCandidate(previous => ({ ...previous, loading: false, error: true })) }
           if (!cancelled) timer = setTimeout(refresh, 3000)
@@ -628,16 +759,20 @@ window.__ModuleLoader__.load({
       if (!candidate.loading && !candidate.error && !row && !state.retry) return null
       const feedback = membershipFeedback(t, state)
       const reason = candidate.error ? t('exchange.reason.unavailable') : row?.reason ? t('exchange.reason.' + row.reason) : ''
-      const retry = state.retry ?? row?.recovery
+      const remoteRecovery = row?.recovery && acknowledgedMembershipReceipts.has(membershipReceiptKey(row.recovery)) ? null : row?.recovery
+      const retry = state.retry ?? remoteRecovery
       return h('div', { 'data-testid': 'membership-row-action', 'aria-busy': state.pending,
         onClick: event => event.stopPropagation(), onKeyDown: event => event.stopPropagation() }, [
         h(Button, { key: 'convert', title: feedback || reason || undefined,
-          disabled: candidate.loading || candidate.error || state.pending || !row || row.status !== 'inactive' || (row.reason !== null && row.recovery === null),
+          disabled: candidate.loading || candidate.error || state.pending || !row || row.status !== 'inactive'
+            || !retry && row.role !== expectedRole || (row.reason !== null && !retry),
           onClick: () => {
             if (!row) return
-            if (row.role === 'subagent') api.openJoin(row)
-            else void convert(row, row.name, retry)
+            if (retry) void convert(row, row.name, retry)
+            else if (row.role === 'subagent') api.openJoin(row)
+            else void convert(row, row.name)
           } }, t(retry ? 'exchange.retry' : expectedRole === 'teammate' ? 'exchange.leave' : 'exchange.join')),
+        retry ? h('span', { key: 'recovery-note', role: 'note' }, t('exchange.recoveryNote')) : null,
         feedback && (state.error || state.result?.status === 'rejected' || state.result?.status === 'recovery-required' || state.result?.notification === 'failed')
           ? h('span', { key: 'feedback', role: 'alert' }, feedback) : null,
       ])
@@ -780,11 +915,22 @@ window.__ModuleLoader__.load({
             try { return resolved.service[method](...args) } catch (error) { return Promise.reject(error) }
           }
           const settings = { describe: () => callSettings('describe', []), mutate: (...args) => callSettings('mutate', args) }
+          const callLimits = async (method, args) => {
+            if (mountError) throw new Error('native-limits-unavailable')
+            const result = remoteValue(await namespace()[method](...args))
+            if (!result.ok) {
+              const conflict = result.error?.code === 'native-limits-conflict' || result.error?.message === 'native-limits-conflict'
+              throw new Error(conflict ? 'native-limits-conflict' : 'native-limits-save-failed')
+            }
+            return result.value
+          }
+          const readLimits = () => callLimits('limits', [])
+          const writeLimits = request => callLimits('saveLimits', [request])
           const register = (name, spec, Component) => { disposers.push(ctx.slots.inject(name, () => ctx.slots.register({ name, locale: LOCALE, ...spec }, Component))) }
-          register('plugins.bundle.config', { key: PACKAGE, inject: () => ({ readStatus: status, settings, remoteMountError: mountError, remoteDiagnosis: diagnosis }) }, BundleConfig)
+          register('plugins.bundle.config', { key: PACKAGE, inject: () => ({ readStatus: status, settings, readLimits, writeLimits, remoteMountError: mountError, remoteDiagnosis: diagnosis }) }, BundleConfig)
           register('plugins.detail.badge', { id: 'collab-ui-status', order: 50 }, DetailBadge)
           register('plugins.detail.section', { id: 'collab-ui-status', order: 50 }, DetailSection)
-          register('plugins.row.config', { key: CONTROL_SLOT_KEY, inject: () => ({ readStatus: status, settings }) }, EnhancementPage)
+          register('plugins.row.config', { key: CONTROL_SLOT_KEY, inject: () => ({ readStatus: status, settings, readLimits, writeLimits }) }, EnhancementPage)
           const service = name => {
             const value = ctx.get(name)
             if (!value) throw new Error('Conversation service unavailable: ' + name)

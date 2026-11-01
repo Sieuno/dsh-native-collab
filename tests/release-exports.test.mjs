@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { checkRoleExports } from '../scripts/check-release.mjs'
 import { ASSEMBLY_ROLES } from '../dist/agent-team/assembly-layout.js'
+import { parsePublishOptions, publicationCommand } from '../scripts/publish-command.mjs'
 
 const packageName = '@sieuno/dsh-native-collab'
 const root = dirname(fileURLToPath(new URL('../package.json', import.meta.url)))
@@ -132,6 +133,35 @@ test('retired root-only generator refuses without emitting partial configuration
     const { readdir } = await import('node:fs/promises')
     assert.deepEqual(await readdir(out), [])
   } finally { await rm(out, { recursive: true, force: true }) }
+})
+
+test('publication options require explicit existing-manager opt-in and reject ambiguous arguments', () => {
+  assert.deepEqual(parsePublishOptions(['v0.3.2']), { tag: 'v0.3.2', pnpmCli: null })
+  const cli = join(root, 'temporary manager', 'bin', 'pnpm.mjs')
+  assert.deepEqual(parsePublishOptions(['v0.3.2', '--pnpm-cli', cli]), { tag: 'v0.3.2', pnpmCli: cli })
+  for (const argv of [[], ['main'], ['v0.3.2', '--force'], ['v0.3.2', '--pnpm-cli'],
+    ['v0.3.2', '--pnpm-cli', '--install'], ['v0.3.2', '--pnpm-cli', 'pnpm.cmd'], ['v0.3.2', '--pnpm-cli', cli, '--force']]) {
+    assert.throws(() => parsePublishOptions(argv))
+  }
+})
+
+test('publication selects native Node plus pnpm only explicitly and preserves the exact TGZ arguments', () => {
+  const filename = join(root, 'verified release', 'package.tgz')
+  const cli = join(root, 'existing manager', 'bin', 'pnpm.mjs')
+  const base = { execPath: process.execPath, platform: process.platform, filename }
+  const expected = ['publish', filename, '--access', 'public', '--ignore-scripts', '--registry', 'https://registry.npmjs.org/']
+  assert.deepEqual(publicationCommand({ ...base, pnpmCli: cli }), { program: process.execPath, args: [cli, ...expected] })
+  assert.deepEqual(publicationCommand({ ...base, platform: 'linux' }), { program: 'npm', args: expected })
+  const windows = publicationCommand({ ...base, platform: 'win32', execPath: String.raw`C:\Program Files\nodejs\node.exe` })
+  assert.equal(windows.program, String.raw`C:\Program Files\nodejs\node.exe`)
+  assert.equal(windows.args[0], String.raw`C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js`)
+  assert.deepEqual(windows.args.slice(1), expected)
+  assert.deepEqual(publicationCommand({ ...base, pnpmCli: cli, otp: '000000' }).args, [cli, ...expected, '--otp', '000000'])
+  assert.throws(() => publicationCommand({ ...base, filename: root }))
+  assert.throws(() => publicationCommand({ ...base, filename: 'relative.tgz' }))
+  assert.throws(() => publicationCommand({ ...base, pnpmCli: 'relative.mjs' }))
+  assert.throws(() => publicationCommand({ ...base, otp: 'not-a-code' }))
+  assert.equal(publicationCommand({ ...base, pnpmCli: cli }).args.filter(arg => arg === filename).length, 1)
 })
 
 test('release waits for shared gates and preserves read-only checkout credentials', async () => {

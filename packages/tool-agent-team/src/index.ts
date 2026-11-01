@@ -6,7 +6,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { TeamError, TeamTaskId } from '@dsh-native-collab/agent-team'
+import { assertTeamMessageIdentity, observeTeamMembership, TeamError, TeamTaskId } from '@dsh-native-collab/agent-team'
 import type { TeamMemberView } from '@dsh-native-collab/agent-team'
 import { isCollabHostDelivery } from '@dsh-native-collab/subagent'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -386,6 +386,7 @@ function install(agent: Agent, ctx: Context, config: Required<Config>): () => vo
         }
         try {
           const caller = callingAgent(exec.agent, 'send_message')
+          assertTeamMessageIdentity(ctx.agentTeams, caller, args.target)
           const matches = ctx.agentTeams.listMembers(caller).filter(member =>
             member.name === args.target || member.id === args.target)
           if (matches.length > 1) throw new TeamError('ambiguous Team target', 'TEAM_MEMBER_NOT_FOUND')
@@ -593,9 +594,15 @@ export function apply(ctx: Context, config: Config = {}): void {
   }
   const installed = new Map<Agent, () => void>()
   const maybeInstall = (agent: Agent): void => {
-    if (installed.has(agent) || ctx.agentTeams.tryMembership(agent) === undefined) return
-    installed.set(agent, install(agent, ctx, resolved))
+    if (ctx.agentTeams.tryMembership(agent) === undefined) {
+      installed.get(agent)?.()
+      installed.delete(agent)
+      return
+    }
+    if (!installed.has(agent)) installed.set(agent, install(agent, ctx, resolved))
   }
+  // Identity changes must update existing scopes, not wait for agent/created.
+  const stopObserving = observeTeamMembership(ctx.agentTeams, maybeInstall)
   for (const agent of ctx.agents.list()) maybeInstall(agent)
   ctx.on('agent/created', ({ agent }) => { maybeInstall(agent); return undefined })
   ctx.on('agent/disposed', ({ agent }) => {
@@ -603,6 +610,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     installed.delete(agent)
   })
   ctx.effect(() => () => {
+    stopObserving()
     for (const dispose of installed.values()) dispose()
     installed.clear()
   }, 'tool-team.scopedTools()')

@@ -94,3 +94,30 @@ jobs:
           path: .test-artifacts/*.json
           if-no-files-found: ignore
           retention-days: 7
+
+  client-types:
+    needs: targets
+    name: Client types / ${{ matrix.target }} / Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            .github/client/rc2/package-lock.json
+            .github/client/alpha2/package-lock.json
+      - run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - run: npm ci --prefix .github/client/${{ matrix.target }} --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Map exact published client declarations
+        run: node scripts/ci/prepare-client-types-map.mjs --target ${{ matrix.target }} --node-modules .github/client/${{ matrix.target }}/node_modules
+      - name: Strict-check browser panels against published declarations
+        run: npm run check:client-types -- --sdk-types-map .test-artifacts/client-types/${{ matrix.target }}-types-map.json --type-root .github/client/${{ matrix.target }}/node_modules/@types --report .test-artifacts/client-types/${{ matrix.target }}-report.json
+      - name: Ensure checks did not change tracked files
+        run: git diff --exit-code

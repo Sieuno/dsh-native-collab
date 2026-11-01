@@ -42,7 +42,7 @@ export function TeamMessageId(id: string): TeamMessageId {
 }
 
 /** Durable teammate lifecycle. */
-export type TeamMemberPhase = 'provisioning' | 'active' | 'failed'
+export type TeamMemberPhase = 'provisioning' | 'active' | 'failed' | 'departed'
 
 /** Whole durable value written on every teammate lifecycle change. */
 export interface TeamMemberSnapshot {
@@ -52,6 +52,8 @@ export interface TeamMemberSnapshot {
   readonly provider: string
   readonly context: 'fresh' | 'fork'
   readonly phase: TeamMemberPhase
+  /** Membership epoch; absent in legacy v2 snapshots and interpreted as 0. */
+  readonly epoch?: number
   readonly error?: string
 }
 
@@ -197,6 +199,24 @@ export interface SpawnTeammateResult {
   readonly member: TeamMemberView
 }
 
+/** One user-interface membership conversion; target identity is supplied separately as a live Agent. */
+export interface ConvertMembershipRequest {
+  readonly operationId: string
+  readonly to: 'teammate' | 'subagent'
+  readonly name?: string
+  readonly description?: string
+}
+
+/** Receipt for one durable join/leave edge. */
+export interface TeamMembershipConversionResult {
+  readonly operationId: string
+  readonly memberId: SessionId
+  readonly from: 'teammate' | 'subagent'
+  readonly to: 'teammate' | 'subagent'
+  readonly epoch: number
+  readonly replayed: boolean
+  readonly name?: string
+}
 /** Input for one direct peer-message attempt. */
 export interface SendTeamMessageRequest {
   readonly target: string
@@ -254,8 +274,10 @@ export interface TeamWaitResult {
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
-    /** Whole teammate lifecycle value, stored only in the Team Lead Session. */
-    'team/member': { version: 2; teamId: TeamId; member: TeamMemberSnapshot }
+    /** Whole teammate lifecycle value (v2) or a membership edge (v3). */
+    'team/member':
+      | { version: 2; teamId: TeamId; member: TeamMemberSnapshot }
+      | { version: 3; teamId: TeamId; operationId: string; action: 'join' | 'leave'; memberId: SessionId; epoch: number; member?: TeamMemberSnapshot }
     /** Whole shared-task value, stored only in the Team Lead Session. */
     'team/task': { version: 2; teamId: TeamId; task: TeamTaskSnapshot }
     /** Historical mailbox enqueue; new sends use the target Agent inbox. */

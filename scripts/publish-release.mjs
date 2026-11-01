@@ -1,13 +1,19 @@
 import { createHash } from 'node:crypto'
 import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, dirname } from 'node:path'
+import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { parsePublishOptions, pnpmManifestPath, publicationCommand } from './publish-command.mjs'
 
 const repository = 'Sieuno/dsh-native-collab'
-const tag = process.argv[2]
-if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(tag ?? '')) {
-  throw new Error('Usage: node scripts/publish-release.mjs vX.Y.Z')
+const { tag, pnpmCli } = parsePublishOptions(process.argv.slice(2))
+if (pnpmCli) {
+  const manager = JSON.parse(await readFile(pnpmManifestPath(pnpmCli), 'utf8'))
+  // pnpm 11 publishes packed files directly; older releases may need an external npm.
+  if (manager.name !== 'pnpm' || !/^\d+\./.test(manager.version) || Number(manager.version.split('.')[0]) < 11) {
+    throw new Error('The explicitly selected entry must belong to an existing pnpm 11+ installation')
+  }
+  await readFile(pnpmCli)
 }
 function command(program, args, capture = false) {
   const result = spawnSync(program, args, { encoding: 'utf8', stdio: capture ? 'pipe' : 'inherit' })
@@ -33,18 +39,10 @@ if (digest !== asset.digest || data.length !== asset.size) throw new Error('Down
 console.log(`Publishing ${manifest.name}@${manifest.version} directly from GitHub Release ${tag}`)
 console.log(`GitHub asset: ${asset.name}; ${digest}`)
 // Publish this exact downloaded file. No npm pack, local build or folder fallback.
-const publishArgs = ['publish', filename, '--access', 'public', '--ignore-scripts', '--registry', 'https://registry.npmjs.org/']
-// Accounts with two-factor auth for writes need the current code; it is read from the
-// environment so it never lands in a shell history file or this script.
-const otp = process.env.NPM_OTP?.trim()
-if (otp) {
-  if (!/^\d{6,8}$/.test(otp)) throw new Error('NPM_OTP must be the current one-time password digits')
-  publishArgs.push('--otp', otp)
-}
-if (process.platform === 'win32') {
-  // Node refuses to spawn .cmd shims without a shell on Windows, so run the npm CLI
-  // bundled next to the current Node binary instead of resolving `npm.cmd`.
-  command(process.execPath, [join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'), ...publishArgs])
-} else {
-  command('npm', publishArgs)
-}
+// Accounts with two-factor auth for writes may supply their current code via
+// the environment; never store it in this script or print the command arguments.
+const invocation = publicationCommand({
+  execPath: process.execPath, platform: process.platform, filename, pnpmCli,
+  otp: process.env.NPM_OTP?.trim() ?? '',
+})
+command(invocation.program, invocation.args)

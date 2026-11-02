@@ -9,7 +9,9 @@ import { assertModelRouteAllowed, readCurrentModelSource, requireAssemblySnapsho
 import { hostDeliverPrompt, modelDeliverySelectionEnabled } from "./host-delivery.js";
 import { decideDelivery } from "./selection.js";
 import { TeamJournal } from "./journal.js";
-import { projectionDisposer } from '../subagent/internal.js';
+import { assertNoIdentityTransition, projectionDisposer } from '../subagent/internal.js';
+import { MembershipExchange } from "./membership-exchange.js";
+import { membershipMessageAdmission, membershipObserver, membershipUiPort } from "./membership-ui.js";
 import { TeamRuntimeLifecycle } from "./lifecycle.js";
 import { teamMemberOwnModelProjection } from "./own-model-projection.js";
 import { teamProjectionDefinition } from "./projection.js";
@@ -18,6 +20,7 @@ import { TeamTaskBoard } from "./task-board.js";
 import { TeamId } from "./types.js";
 export { TeamId, TeamMessageId, TeamTaskId } from "./types.js";
 export { TeamError } from "./error.js";
+export { assertTeamMessageIdentity, observeTeamMembership } from "./membership-ui.js";
 const DEFAULT_MAX_MEMBERS = 16;
 const DEFAULT_MAX_TASKS = 256;
 const DEFAULT_MAX_MESSAGE_BYTES = 65_536;
@@ -90,6 +93,19 @@ export class TeamService extends Service {
     journal;
     roster;
     tasks;
+    membershipListeners = new Set();
+    [membershipMessageAdmission] = (caller, target) => {
+        assertNoIdentityTransition(this.ctx.subagents, caller.id);
+        const membership = this.roster.membership(caller);
+        const historical = this.journal.state(membership.root).members.filter(member => member.name === target || member.id === target);
+        for (const member of historical)
+            assertNoIdentityTransition(this.ctx.subagents, member.id);
+    };
+    [membershipUiPort];
+    [membershipObserver] = (listener) => {
+        this.membershipListeners.add(listener);
+        return () => { this.membershipListeners.delete(listener); };
+    };
     constructor(ctx, config = {}) {
         const snapshot = requireAssemblySnapshot(ctx);
         super(ctx, 'agentTeams');
@@ -108,6 +124,11 @@ export class TeamService extends Service {
         this.journal = new TeamJournal(ctx, (root) => { this.activity.notify(TeamId(root.id)); });
         this.roster = new TeamRoster(ctx, this.journal, this.lifecycle, this.config.maxMembers, selectionPort(ctx, this.selectionEnhanced));
         this.tasks = new TeamTaskBoard(this.journal, this.config.maxTasks);
+        this[membershipUiPort] = new MembershipExchange(ctx, this.roster, this.journal, this.lifecycle, child => {
+            for (const listener of this.membershipListeners)
+                listener(child);
+            this.activity.notify(TeamId(child.session.header.parentSession ?? child.id));
+        });
         ctx.on('agent/created', ({ agent }) => { this.scheduleRecovery(agent); return undefined; });
         ctx.on('agent/status', ({ agent }) => {
             const membership = this.roster.tryMembership(agent);
@@ -243,10 +264,12 @@ export class TeamService extends Service {
     }
     /** Deliver an admitted send using the Lead's authority and the actual sender's identity. */
     async sendAdmitted(caller, request) {
+        this[membershipMessageAdmission](caller, request.target);
         const membership = this.roster.membership(caller);
         request.signal.throwIfAborted();
         const { root } = membership;
         const target = resolveActiveMember(root, this.journal.state(root), request.target);
+        assertNoIdentityTransition(this.ctx.subagents, target.id);
         if (target.id === caller.id)
             throw new TeamError('a Team member cannot message itself', 'TEAM_SELF_MESSAGE');
         const taskResult = request.taskResult === true;
@@ -302,7 +325,7 @@ export class TeamService extends Service {
         queueMicrotask(() => {
             if (this.lifecycle.disposed)
                 return;
-            void this.roster.recoverFor(agent, this.lifecycle.signal).catch((error) => {
+            void this.roster.recoverFor(agent, this.lifecycle.signal).then(() => this[membershipUiPort].recover(agent)).catch((error) => {
                 if (this.lifecycle.disposed)
                     return;
                 this.ctx.logger.warn(`Agent Teams recovery for "${agent.id}" failed: ${errorMessage(error)}`);

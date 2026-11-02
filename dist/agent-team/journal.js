@@ -46,6 +46,11 @@ export class TeamJournal {
                 this.tails.delete(rootId);
         }
     }
+    /** Re-flush an already projected event/receipt before allowing a retrying caller to proceed. */
+    async flush(root) {
+        await this.ctx.sessions.flush(root.session);
+        this.onCommit(root);
+    }
     /**
      * Append and checkpoint one root-owned Team event before publication.
      * @param root - exact live Lead whose Session owns the event.

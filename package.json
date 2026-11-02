@@ -1,6 +1,6 @@
 {
   "name": "@sieuno/dsh-native-collab",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Deepseek Harness Agent协作增强（基于原版插件）. DeepSeek Harness agent collaboration enhancements (based on the original plugin). Unofficial community plugin / 非官方社区插件。",
   "icon": "./icons/subagent.svg",
   "type": "module",
@@ -12,6 +12,8 @@
   "files": [
     "dist/**/*.js",
     "locale/*.json",
+    "locale/settings.*.md",
+    "packages/agent-team/browser-panels/NOTICE",
     "packages/agent-team/locale/*.json",
     "packages/agent-team/LICENSE",
     "packages/subagent/locale/*.json",
@@ -92,6 +94,7 @@
     "validate:package": "node scripts/check-release.mjs",
     "check:load": "node scripts/check-load.mjs",
     "check:types": "node scripts/check-types.mjs",
+    "check:client-types": "node scripts/check-client-types.mjs",
     "pack:dry": "npm pack --dry-run",
     "build": "node scripts/emit-dist.mjs",
     "test": "node scripts/test.mjs unit",

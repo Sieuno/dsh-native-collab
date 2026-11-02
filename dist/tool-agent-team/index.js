@@ -2,7 +2,7 @@
 import { inspect } from 'node:util';
 import { brandString } from '@deepseek-ai/dsh-brand';
 import z from '@deepseek-ai/schemastery';
-import { TeamError, TeamTaskId } from '../agent-team/index.js';
+import { assertTeamMessageIdentity, observeTeamMembership, TeamError, TeamTaskId } from '../agent-team/index.js';
 import { isCollabHostDelivery } from '../subagent/index.js';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { listIndependentAgents, waitForAgents } from "./agent-directory.js";
@@ -349,6 +349,7 @@ function install(agent, ctx, config) {
                 }
                 try {
                     const caller = callingAgent(exec.agent, 'send_message');
+                    assertTeamMessageIdentity(ctx.agentTeams, caller, args.target);
                     const matches = ctx.agentTeams.listMembers(caller).filter(member => member.name === args.target || member.id === args.target);
                     if (matches.length > 1)
                         throw new TeamError('ambiguous Team target', 'TEAM_MEMBER_NOT_FOUND');
@@ -550,10 +551,16 @@ export function apply(ctx, config = {}) {
     };
     const installed = new Map();
     const maybeInstall = (agent) => {
-        if (installed.has(agent) || ctx.agentTeams.tryMembership(agent) === undefined)
+        if (ctx.agentTeams.tryMembership(agent) === undefined) {
+            installed.get(agent)?.();
+            installed.delete(agent);
             return;
-        installed.set(agent, install(agent, ctx, resolved));
+        }
+        if (!installed.has(agent))
+            installed.set(agent, install(agent, ctx, resolved));
     };
+    // Identity changes must update existing scopes, not wait for agent/created.
+    const stopObserving = observeTeamMembership(ctx.agentTeams, maybeInstall);
     for (const agent of ctx.agents.list())
         maybeInstall(agent);
     ctx.on('agent/created', ({ agent }) => { maybeInstall(agent); return undefined; });
@@ -562,6 +569,7 @@ export function apply(ctx, config = {}) {
         installed.delete(agent);
     });
     ctx.effect(() => () => {
+        stopObserving();
         for (const dispose of installed.values())
             dispose();
         installed.clear();

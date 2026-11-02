@@ -45,6 +45,7 @@ export class TeamTaskBoard {
     const { root } = membership
     return this.journal.transact(root.id, async () => {
       const state = this.journal.state(root)
+      this.assertCurrentMembership(state, membership, membership.memberId)
       const active = state.tasks.filter(task => task.status !== 'deleted').length
       if (active >= this.maxTasks) {
         throw new TeamError(`Team task limit ${this.maxTasks} reached`, 'TEAM_TASK_LIMIT')
@@ -110,6 +111,7 @@ export class TeamTaskBoard {
     const root = membership.root
     return this.journal.transact(root.id, async () => {
       const state = this.journal.state(root)
+      this.assertCurrentMembership(state, membership, caller.id)
       const current = state.tasks.find(task => task.id === request.taskId)
       if (current === undefined) throw new TeamError(`team task "${request.taskId}" not found`, 'TEAM_TASK_NOT_FOUND')
       if (current.revision !== request.expectedRevision) {
@@ -208,6 +210,19 @@ export class TeamTaskBoard {
       await this.journal.appendAndFlush(root, 'team/task', { version: 2, teamId: TeamId(root.id), task })
       return projectTaskView(state, task)
     })
+  }
+
+  /** Reject stale caller authority captured before a queued mutation. */
+  private assertCurrentMembership(state: TeamState, membership: TeamMembership, callerId: Agent['id']): void {
+    if (membership.memberId !== callerId) throw new TeamError('task caller identity changed before mutation', 'TEAM_TASK_UNAUTHORIZED')
+    if (membership.role === 'lead') {
+      if (callerId !== membership.root.id || membership.name !== 'lead') throw new TeamError('stale Team Lead identity', 'TEAM_TASK_UNAUTHORIZED')
+      return
+    }
+    const current = state.members.find(member => member.id === callerId)
+    if (current === undefined || current.phase !== 'active' || (current.epoch ?? 0) !== membership.epoch) {
+      throw new TeamError('Team membership changed before task mutation; retry with current identity', 'TEAM_TASK_UNAUTHORIZED')
+    }
   }
 
   /** Validate and de-duplicate dependency ids against the current task graph. */

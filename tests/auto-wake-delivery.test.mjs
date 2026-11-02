@@ -22,7 +22,8 @@ function methodDeclaration(owner, name) {
 const managerSource = await readSource('packages/subagent/src/manager.ts');
 const managerAst = parseSource(managerSource, 'packages/subagent/src/manager.ts');
 const managerClass = classDeclaration(managerAst, 'SubagentManager');
-const managerMethods = ['sendMessage', 'sendToParent', 'submitAdmitted', 'notifySettlement']
+const managerMethods = ['sendMessage', 'sendToParent', 'submitAdmitted', 'notifySettlement',
+  'assertDeliveryIdentity', 'captureIdentityGeneration', 'assertIdentityGeneration', 'assertRecoveryAvailable', 'throwTransitionError']
   .map((name) => methodDeclaration(managerClass, name).getText(managerAst));
 const teamSource = await readSource('packages/agent-team/src/index.ts');
 const teamAst = parseSource(teamSource, 'packages/agent-team/src/index.ts');
@@ -38,10 +39,13 @@ const { AutoWakeGuard, AutoWakeLimitError } = await import(
 );
 
 // These are exact production method bodies. Stubs isolate integrations; no AgentLoop is simulated.
+const fenceSource = await readSource('packages/subagent/src/identity-transition-fence.ts');
 const isolatedSource = `
+${fenceSource.replace(/export /g, '')}
 class IsolatedManager {
   constructor(Guard) {
     this.live = new Map(); this.resident = new Map(); this.inbox = new Map();
+    this.identityTransitions = new IdentityTransitionFence(); this.identityRecoveryBlocked = new Set();
     this.guard = new Guard(); this.deliveryOptions = []; this.cancelCalls = 0;
     this.host = { reserveAutomatic: (sender, target) => this.guard.reserve('family', 1) };
     this.ctx = { agents: { get: (id) => this.live.get(id) }, logger: { warn() {} } };
@@ -114,10 +118,10 @@ test('parent reports are exempt only on exact live parent; settlement notices ne
   const { m, parent, child, messages } = boundFixture();
   m.guard.reserve('family', 1).commit();
   const activation = m.resident.get(child.id);
-  const id = m.sendToParent(activation, child, [{ type: 'text', text: 'done' }], 'steer', true);
+  const id = m.sendToParent(activation, child, [{ type: 'text', text: 'done' }], 'steer', true, m.captureIdentityGeneration(child.id), m.captureIdentityGeneration(parent.id));
   assert.ok(id);
   assert.equal(messages.length, 1);
-  assert.throws(() => m.sendToParent(activation, child, [], 'steer', false), AutoWakeLimitError);
+  assert.throws(() => m.sendToParent(activation, child, [], 'steer', false, m.captureIdentityGeneration(child.id), m.captureIdentityGeneration(parent.id)), AutoWakeLimitError);
   assert.equal(messages.length, 1, 'ordinary child-to-parent message at the limit is not delivered');
   await assert.rejects(m.sendMessage(child, child.id, [], { signal, result: true }), /task result may only be sent to the exact live direct parent/);
   for (const terminal of [{ stopReason: 'stop' }, { stopReason: 'error' }, { stopReason: 'completed' }]) {
@@ -139,11 +143,15 @@ test('manager failed synchronous delivery refunds its reservation', () => {
 const teamSourceBody = `
 class IsolatedTeam {
   constructor(ctx) { this.ctx = ctx; this.activity = { notify() {} }; this.config = { maxMessageBytes: 100000 }; }
+  [membershipMessageAdmission]() {}
   ${sendAdmitted}
 }
 export { IsolatedTeam };
 `;
 const teamPreamble = `
+// Automatic-budget tests isolate the Team->runtime bridge; real fence cases live in identity-transition-fence.test.mjs.
+function assertNoIdentityTransition() {}
+const membershipMessageAdmission = Symbol.for('@sieuno/dsh-native-collab.membershipMessageAdmission');
 const Buffer = globalThis.Buffer;
 function resolveActiveMember(root, _state, target) { return root.roster.get(target); }
 function structuredClone(value) { return globalThis.structuredClone(value); }

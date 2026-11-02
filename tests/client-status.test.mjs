@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { clientRequire, clientContext, clientModule, visit } from './browser-fixture.mjs'
 async function load(React, remote) {
   const spec = await clientModule({}, { emitted: true })
@@ -14,14 +15,14 @@ async function load(React, remote) {
   for (const provider of providers) provider()
   return { spec, plugin, registrations, cleanup }
 }
-test('browser entry mounts its namespace and locale before registering four supported slots without an installation popup', async () => {
+test('browser entry mounts its namespace and locale before registering settings slots and two conversation cells without an installation popup', async () => {
   let calls = 0
   const React = { Fragment: 'fragment', useState: initial => [initial, () => {}], createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) }
   const { spec, plugin, registrations, cleanup } = await load(React, { collabUi: { async status() { calls++; return { profileName: null, hmrEnabled: null, rows: [], desired: 'unchanged', pendingRestart: 'unknown', writeSupport: 'unsupported', operationError: 'transaction-unavailable', error: null, assembly: null } } } })
   assert.equal(spec.id, '@sieuno/dsh-native-collab')
   assert.deepEqual([...plugin.inject], ['slots', 'remote', 'locale'])
   assert.equal(calls, 0)
-  assert.deepEqual(registrations.map(row => row.contract.name), ['plugins.bundle.config', 'plugins.detail.badge', 'plugins.detail.section', 'plugins.row.config'])
+  assert.deepEqual(registrations.map(row => row.contract.name), ['plugins.bundle.config', 'plugins.detail.badge', 'plugins.detail.section', 'plugins.row.config', 'conversation.session.header.actions', 'conversation.session.header.actions'])
   assert.equal(registrations[0].contract.key, '@sieuno/dsh-native-collab')
   const injected = registrations[0].contract.inject()
   assert.equal(typeof injected.readStatus, 'function')
@@ -60,4 +61,17 @@ test('collapsed diagnostics unwrap RemoteResult and expose no obsolete preview a
   assert.deepEqual(actions, [])
   assert.equal(visit(draw(), node => node.props?.['data-testid'] === 'preview-result').length, 0)
   cleanup(); await view.cleanup()
+})
+
+test('localized package detail points to short settings guidance instead of the README fallback', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+  assert.ok(manifest.files.includes('locale/settings.*.md'))
+  assert.ok(manifest.files.includes('packages/agent-team/browser-panels/NOTICE'))
+  for (const language of ['en', 'zh']) {
+    const locale = JSON.parse(await readFile(new URL('../locale/' + language + '.json', import.meta.url), 'utf8'))
+    assert.equal(locale.meta.detail, 'locale/settings.' + language + '.md')
+    const detail = await readFile(new URL('../' + locale.meta.detail, import.meta.url), 'utf8')
+    assert.ok(detail.trim().length > 0 && detail.length < 300)
+    assert.doesNotMatch(detail, /#|README/)
+  }
 })

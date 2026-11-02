@@ -1,1 +1,1 @@
-Configure collaboration enhancements below. To change identity, use the Team member or Subagent viewer popover in the conversation header.
+Configure collaboration enhancements below. To change identity between Team members and Subagents, use the member or Subagent panel in the conversation header.

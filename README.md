@@ -1,6 +1,6 @@
 # DSH Native Collab · 原生协作增强
 
-**Deepseek Harness Agent 协作增强（基于原版插件）**：为 DeepSeek Harness (DSH) 提供子 Agent 沟通增强与 Team 模型选择支持，是修改自 DSH 的**非官方社区插件**（非官方发行版）。
+**Deepseek Harness Agent 协作增强（基于原版插件）**：为 DeepSeek Harness (DSH) 提供子 Agent 沟通增强、Team 成员与子 Agent 身份互转、灵活的模型选择及运行限制管理，是修改自 DSH 的**非官方社区插件**（非官方发行版）。
 
 [English](https://github.com/Sieuno/dsh-native-collab/blob/main/README.en.md) · [安装指南](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/INSTALL.md) · [常见问题 (FAQ)](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.md) · [反馈](https://github.com/Sieuno/dsh-native-collab/issues)
 
@@ -32,8 +32,10 @@ dsh plugin --profile <profile> add @sieuno/dsh-native-collab
 
 | 功能 | 说明 |
 |---|---|
+| Team / Subagent 身份互转 | 支持在对话面板中将空闲的直属子 Agent 加入 Team，或将 Team 成员转为独立子 Agent；完整保留会话 ID、聊天历史、模型配置及工作目录，并具备防误触与状态安全保护。 |
 | 子 Agent 沟通增强 | 插件配置页提供增强主开关，并支持“工作中接收补充要求”与“允许继续已完成的子对话”；关闭增强后保留原生基础能力与权限规则。 |
 | Team 与子 Agent 模型选择 | 统一提供三种模型来源：对话开始时设置的子模型列表、DSH 当前设置的子模型列表、当前 DSH 全部可用模型；后两者在每次查询或创建 Agent 时重新读取，并遵循模型适配器与权限校验。 |
+| 子 Agent 运行限制配置 | 在插件设置页统一读取与配置最大递归深度与并行数量上限，直接同步读写原生 `subagent` 设置，无需维护两套副本。 |
 | 连续自动唤醒轮数上限 | 默认 32 轮，由会话所有 Agent 共享，防止多 Agent 协作死循环；只统计无用户输入介入的连续自动唤醒，用户输入或进程重启即清零，子任务完成/停止的自动回报不受此限。 |
 
 本插件提供的工具与原生客户端一致，但重写了工具实现。在不额外增加臃肿的工具注入下，极大提升了使用子会话/Subagent的舒适性。

@@ -1,6 +1,6 @@
 # DSH Native Collab · Native Collaboration Enhancements
 
-**DeepSeek Harness agent collaboration enhancements (based on the original plugin)**: child Agent communication enhancements and Team model selection for DeepSeek Harness (DSH). An **unofficial community plugin** derived from DSH (not an official distribution).
+**DeepSeek Harness agent collaboration enhancements (based on the original plugin)**: child Agent communication enhancements, Team/Subagent identity exchange, flexible model selection, and runtime limit management for DeepSeek Harness (DSH). An **unofficial community plugin** derived from DSH (not an official distribution).
 
 [中文](https://github.com/Sieuno/dsh-native-collab/blob/main/README.md) · [Installation Guide](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/INSTALL.en.md) · [FAQ](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.en.md) · [Issues](https://github.com/Sieuno/dsh-native-collab/issues)
 
@@ -32,8 +32,10 @@ After the restart, open the plugin management page:
 
 | Feature | Description |
 |---|---|
+| Team / Subagent Identity Exchange | Convert direct, idle subagents under the current Lead into Team members, or turn Team members into standalone subagents from the conversation header popover; preserves session ID, chat history, model configuration, and working directory with built-in safety checks. |
 | Child Agent communication enhancements | The plugin settings page provides a main enhancement switch plus "accept additional instructions while working" and "allow continuing completed child conversations"; disabling enhancements retains native capabilities and permission rules. |
 | Model selection for Team and child Agents | Three model sources: the child model list set at conversation start, the child model list in current DSH settings, and all models currently available in DSH; the latter two are re-read on every query or Agent creation, subject to model adapter and permission checks. |
+| Subagent runtime limit configuration | Directly read and configure maximum recursion depth and concurrency limits from the plugin settings page, synchronized directly with native `subagent` settings without maintaining duplicate stores. |
 | Consecutive automatic wake-up limit | 32 rounds by default, shared by all Agents associated with the session to prevent multi-agent loops; only consecutive automatic wake-ups without user input are counted, user input or a process restart resets the count, and automatic child-task completion/stop reports are exempt. |
 
 The plugin provides the same tools as the native client, but rewrites their implementations. This greatly improves the experience of working with child conversations/Subagents without injecting a bulky set of additional tools.

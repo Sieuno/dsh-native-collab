@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.3.4（2026-11-05）
+
+本次为 DSH 2.0.22 启动崩溃的修复版本，功能面与 0.3.3 一致，不新增用户可见功能；升级后首次启动不再因内部配置解析失败而中断插件激活。
+
+- 修复 `internal/config` 瀑布钩子只从 `this` 读取 fiber 导致的启动崩溃：Cordis 自身解析配置候选时以 `waterfall('internal/config', fiber, next)` 派发，监听器 `this` 为 `null`，`this.uid` 抛出 `TypeError: Cannot read properties of null (reading 'uid')`，异常穿过钩子链打断激活流程，14 个插件连带失败（含 required 的 `web-runtime`、`connection`），宿主报 `2 required plugins did not activate`。
+- `collab-ui` 与 `preset-adapter` 两处钩子改为同时接受两种派发形状：`this` 优先、首个实参兜底，并对 `ctx.fiber?.uid`、`fiber?.entry` 补空值保护；配置编辑路径（`waterfall(fiber, 'internal/config', …)`）原有的候选校验行为保持不变，不静默跳过。
+- 新增回归用例覆盖 `this === null` 的派发，以及 null / undefined / {} / 无 entry / 非托管预设五种首参的原样透传，避免后续改动重新引入该崩溃。
+- **验证范围**：`tests/preset-adapter.test.mjs` 6/6 通过，`emit-dist --check` 与提交的 dist 逐字节一致，`validate:package` 与 CI 的 unit / SDK / source-contracts / client 全绿；崩溃现场取自 DSH 2.0.22 真实启动失败日志，升级后首次启动的实际恢复情况仍建议在真实 Profile 上确认。
+
 ## 0.3.3（2026-11-02）
 
 本次从 main 发布正式版，包含 0.3.2 的全部设置修复，并带来 Team / Subagent 身份互转及操作恢复保护。正式发布不代表原生回放与停用回退限制已解除；使用身份互转前请阅读下列注意事项。

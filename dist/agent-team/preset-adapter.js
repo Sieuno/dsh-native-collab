@@ -58,10 +58,14 @@ export function adaptPresetConfig(value, flags = { model: true, communication: t
  * this hook is absent: the original preset activates unchanged.
  */
 export function installPresetAdapter(ctx, enhancements) {
-    ctx.on('internal/config', function (_raw, next) {
+    // Two dispatch shapes reach this hook: Cordis's candidate resolution passes the fiber
+    // as the first argument with `this === null`, ConfigEditor's edit path binds it as
+    // `this`. Accept both; reading it from `this` alone aborted startup.
+    ctx.on('internal/config', function (first, next) {
         const value = next();
-        const entry = this.entry;
-        if (!entry || this.parent.fiber?.entry === entry || entry.options.name !== PRESET_MODULE || !MANAGED_PRESET_IDS.includes(entry.options.id ?? ''))
+        const fiber = (this ?? first);
+        const entry = fiber?.entry;
+        if (!fiber || !entry || fiber.parent?.fiber?.entry === entry || entry.options.name !== PRESET_MODULE || !MANAGED_PRESET_IDS.includes(entry.options.id ?? ''))
             return value;
         return adaptPresetConfig(value, enhancements());
     }, { global: true, prepend: true });

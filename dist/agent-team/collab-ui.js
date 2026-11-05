@@ -164,11 +164,18 @@ let CollabUiService = (() => {
             // ConfigEditor calls this waterfall before writing YAML. Schemastery treats
             // optional null as absent, so enforce the numeric write contract here, scoped
             // to this exact plugin fiber. Clearing uses the official op:unset path.
-            ctx.on('internal/config', function (_raw, next) {
+            // Two dispatch shapes reach this hook. Cordis's own candidate resolution emits
+            // `waterfall('internal/config', fiber, next)` — the fiber is the first argument and
+            // the listener runs with `this === null` — while ConfigEditor's edit path emits
+            // `waterfall(fiber, 'internal/config', candidate, next)`, where the fiber is `this`.
+            // Reading the fiber from `this` alone threw on every resolved candidate and aborted
+            // whichever plugin was activating, so accept both shapes.
+            ctx.on('internal/config', function (first, next) {
                 const raw = next();
+                const fiber = (this ?? first);
                 // Cordis may expose a reflected Fiber proxy to listeners; uid identifies
                 // the exact lifetime within this Context tree without proxy identity drift.
-                if (this.uid !== ctx.fiber.uid)
+                if (!fiber || fiber.uid !== ctx.fiber?.uid)
                     return raw;
                 if (typeof raw === 'object' && raw !== null) {
                     // runtimeMode is a deprecated compatibility field, never a separate

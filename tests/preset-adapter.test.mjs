@@ -186,6 +186,29 @@ test('hook is global prepend, handles only known preset entries, calls next once
   assert.equal(hook.reads(), MANAGED_PRESET_IDS.length)
 })
 
+test('hook survives the null-this dispatch Cordis uses when resolving a candidate', () => {
+  // Cordis's own resolution emits `waterfall('internal/config', fiber, next)`: the fiber
+  // arrives as the first argument and the listener runs with `this === null`. Reading the
+  // fiber from `this` alone threw inside the host's startup config waterfall and took
+  // every plugin activating at that moment down with it.
+  const hook = install()
+  const resolved = freeze({
+    plugins: [{ id: 'tool-subagent-fork', name: '@deepseek-ai/dsh-tool-subagent', config: { provider: 'fork' } }],
+  })
+  for (const id of MANAGED_PRESET_IDS) {
+    let calls = 0
+    const result = Reflect.apply(hook.listener, null, [fiber({ options: { name: PRESET, id } }), () => { calls += 1; return resolved }])
+    assert.equal(calls, 1)
+    assert.notEqual(result, resolved)
+    assert.equal(result.plugins[0].name, NAMES.fork)
+    assert.equal(result.plugins[0].config, resolved.plugins[0].config)
+  }
+  for (const first of [null, undefined, {}, { entry: null }, { options: { name: PRESET, id: 'preset-user' } }]) {
+    const value = { plugins: [] }
+    assert.equal(Reflect.apply(hook.listener, null, [first, () => value]), value)
+  }
+})
+
 test('native recovery has no hook, so original tool names stay unchanged', () => {
   assert.equal(uiSource.match(/installPresetAdapter\(/g).length, 1)
   assert.match(uiSource, /installPresetAdapter\(ctx, \(\) => \(\{ model: this\.assembly\?\.modelEnhancement === true, communication: this\.assembly\?\.communicationEnhancement === true \}\)\)\r?\n\s*this\.managedRuntime = new ManagedRuntime\(ctx, 'managed'\)/)

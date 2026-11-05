@@ -5,6 +5,7 @@
  * The volatile Config and immutable assembly snapshot remain owned by this Context.
  */
 import { Context } from '@deepseek-ai/cordis'
+import type { Fiber } from '@deepseek-ai/cordis'
 import type Schema from '@deepseek-ai/schemastery'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 
@@ -159,11 +160,18 @@ export class CollabUiService extends TypertRemoteService {
     // ConfigEditor calls this waterfall before writing YAML. Schemastery treats
     // optional null as absent, so enforce the numeric write contract here, scoped
     // to this exact plugin fiber. Clearing uses the official op:unset path.
-    ctx.on('internal/config', function (this: import('@deepseek-ai/cordis').Fiber, _raw, next) {
+    // Two dispatch shapes reach this hook. Cordis's own candidate resolution emits
+    // `waterfall('internal/config', fiber, next)` — the fiber is the first argument and
+    // the listener runs with `this === null` — while ConfigEditor's edit path emits
+    // `waterfall(fiber, 'internal/config', candidate, next)`, where the fiber is `this`.
+    // Reading the fiber from `this` alone threw on every resolved candidate and aborted
+    // whichever plugin was activating, so accept both shapes.
+    ctx.on('internal/config', function (this: Fiber | null, first: unknown, next: () => unknown) {
       const raw: unknown = next()
+      const fiber = (this ?? first) as Fiber | null
       // Cordis may expose a reflected Fiber proxy to listeners; uid identifies
       // the exact lifetime within this Context tree without proxy identity drift.
-      if (this.uid !== ctx.fiber.uid) return raw
+      if (!fiber || fiber.uid !== ctx.fiber?.uid) return raw
       if (typeof raw === 'object' && raw !== null) {
         // runtimeMode is a deprecated compatibility field, never a separate
         // activation switch or a requirement for saving ordinary preferences.

@@ -154,7 +154,9 @@ test('committed receipts reconcile identity and recover notifications after coor
   assert.equal(h.blocked.size, 0, 'durable receipt plus stable reconciliation clears the manager-owned guard')
   assert.equal(h.calls.filter(value => value === 'reconcile').length, 3)
   assert.equal(h.inbox.length, 1)
-  await h.restart().recover(h.root)
+  const restarted = h.restart()
+  await restarted.recover(h.root)
+  assert.equal((await restarted.candidates())[0].recovery, null, 'a settled receipt does not offer a retry after restart')
   assert.equal(h.inbox.length, 1, 'durable inbox source serves as operation/receiver receipt')
 })
 
@@ -173,7 +175,7 @@ test('recovery snapshot skips a receipt superseded while its confirmation flush 
   assert.equal(h.calls.filter(value => value === 'reconcile').length, 2, 'stale snapshot is not reconciled or used to clear another operation guard')
 })
 
-test('membership leave and join round trips use distinct operations and current-role receipts', async () => {
+test('membership leave and join round trips use distinct operations and leave no recovery pending', async () => {
   const h = harness()
   const leaveOne = { rootId: 'root', targetId: 'child', operationId: 'leave-1', to: 'subagent' }
   const joinOne = { rootId: 'root', targetId: 'child', operationId: 'join-1', to: 'teammate', name: 'worker' }
@@ -184,13 +186,13 @@ test('membership leave and join round trips use distinct operations and current-
   assert.equal((await h.exchange.convert(joinOne)).status, 'converted')
   const teammate = (await h.exchange.candidates())[0]
   assert.equal(teammate.role, 'teammate')
-  assert.equal(teammate.recovery.operationId, 'join-1')
+  assert.equal(teammate.recovery, null)
   assert.equal((await h.exchange.convert(leaveTwo)).status, 'converted')
   assert.equal((await h.exchange.candidates())[0].role, 'subagent')
   assert.equal((await h.exchange.convert(joinTwo)).status, 'converted')
   const final = (await h.exchange.candidates())[0]
   assert.equal(final.role, 'teammate')
-  assert.equal(final.recovery.operationId, 'join-2')
+  assert.equal(final.recovery, null)
   assert.deepEqual(h.state.operations.map(item => item.operationId), ['leave-1', 'join-1', 'leave-2', 'join-2'])
 })
 
@@ -200,11 +202,13 @@ test('lost committed reply is recoverable from the durable receipt after coordin
   assert.ok(h.blocked.has('child'))
   h.commitFailure = false
   const restarted = h.restart()
+  const [blockedCandidate] = await restarted.candidates()
+  assert.deepEqual(blockedCandidate.recovery, request, 'the Manager guard preserves the exact retry after coordinator reload')
   await restarted.recover(h.root)
   const [candidate] = await restarted.candidates()
   assert.equal(candidate.role, 'subagent', 'candidate reflects the post-transition role')
-  assert.deepEqual(candidate.recovery, { rootId: 'root', targetId: 'child', operationId: request.operationId, to: 'subagent' })
-  const replay = await restarted.convert(candidate.recovery)
+  assert.equal(candidate.recovery, null)
+  const replay = await restarted.convert(request)
   assert.equal(replay.status, 'unchanged')
   assert.equal(h.state.operations.length, 1, 'same operation is replayed rather than reversed or duplicated')
   assert.equal(h.blocked.size, 0)
@@ -268,7 +272,7 @@ test('browser recovers the same server receipt after remount and changed Team ro
         candidate = { ...row, role: 'subagent', recovery: { rootId: value.rootId, targetId: value.targetId, operationId: value.operationId, to: value.to } }
         throw new Error('reply lost')
       }
-      return { ...request, operationId: value.operationId, status: 'unchanged', reason: null, notification: 'unchanged' }
+      return { ...request, operationId: value.operationId, status: 'unchanged', reason: null, notification: calls.length === 2 ? 'failed' : 'unchanged' }
     },
   } }
   const project = { projectionsBySession: { root: { values: { agentTeam: { members: [{ id: 'child', name: 'worker', phase: 'active' }], tasks: [] } } } }, byId: {}, phase: 'ready' }
@@ -321,6 +325,11 @@ test('browser recovers the same server receipt after remount and changed Team ro
   assert.equal(calls[0].operationId, calls[1].operationId)
   assert.equal(calls[0].to, calls[1].to)
   panel = renderer.draw(ui.exchangeNode.type, ui.exchangeNode.props)
+  const retryNotification = visit(panel, node => node.type === 'button' && text(node).includes('exchange.retry'))[0]
+  assert.ok(retryNotification, 'a failed notification keeps the same operation retryable')
+  retryNotification.props.onClick(); await tick(); await tick()
+  assert.deepEqual(calls[2], calls[1])
+  panel = renderer.draw(ui.exchangeNode.type, ui.exchangeNode.props)
   assert.equal(visit(panel, node => node.type === 'button' && text(node).includes('exchange.retry')).length, 0,
     'a successful explicit replay is acknowledged for the mounted component without a local operation cache')
   const joins = []
@@ -330,7 +339,7 @@ test('browser recovers the same server receipt after remount and changed Team ro
   assert.ok(join, 'current subagent role offers a new join action rather than replaying the completed leave')
   join.props.onClick()
   assert.deepEqual(joins, [candidate])
-  assert.equal(calls.length, 2, 'starting a reverse operation requires the separate explicit dialog action')
+  assert.equal(calls.length, 3, 'starting a reverse operation requires the separate explicit dialog action')
   await ui.dispose(); renderer.destroy()
 })
 

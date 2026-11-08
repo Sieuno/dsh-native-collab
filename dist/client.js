@@ -698,9 +698,9 @@ window.__ModuleLoader__.load({
         try {
           const result = await api.convert(request)
           const completed = result.status === 'converted' || result.status === 'unchanged'
-          if (completed) acknowledgedMembershipReceipts.add(membershipReceiptKey(request))
+          if (completed && result.notification !== 'failed') acknowledgedMembershipReceipts.add(membershipReceiptKey(request))
           if (alive.current) setState({ pending: false, result, error: false,
-            retry: result.status === 'recovery-required' ? request : null })
+            retry: result.status === 'recovery-required' || result.notification === 'failed' ? request : null })
           return result
         } catch {
           if (alive.current) setState({ pending: false, result: null, error: true, retry: request })

@@ -110,24 +110,27 @@ export class MembershipExchange {
                     continue;
                 const live = this.ctx.agents.get(entry.id);
                 let reason = null;
+                let recovery = this.recovering.get(entry.id) ?? this.pendingNotifications.get(entry.id) ?? null;
                 try {
                     assertNoIdentityTransition(this.ctx.subagents, entry.id);
                 }
                 catch (error) {
                     reason = membershipExchangeReason(error);
+                    // A rebuilt coordinator only needs a durable retry request while the Manager still guards this child.
+                    if (recovery === null && typeof error === 'object' && error !== null && 'code' in error && error.code === 'IDENTITY_RECOVERY_REQUIRED') {
+                        const receipt = [...receiptSnapshot].reverse().find(value => value.memberId === entry.id);
+                        if (receipt !== undefined)
+                            recovery = { rootId: root.id, targetId: entry.id, operationId: receipt.operationId, to: receipt.to };
+                    }
                 }
                 if (live !== undefined && live.status !== 'idle')
                     reason = 'busy';
-                const receipt = [...receiptSnapshot].reverse().find(value => value.memberId === entry.id);
-                const durableRecovery = receipt === undefined ? null : {
-                    rootId: root.id, targetId: entry.id, operationId: receipt.operationId, to: receipt.to,
-                };
                 rows.push({
                     rootId: root.id, targetId: entry.id,
                     role: member?.phase === 'active' ? 'teammate' : 'subagent',
                     name: member?.name ?? '', label: entry.label,
                     status: live?.status === 'running' ? 'running' : 'inactive', reason,
-                    recovery: this.recovering.get(entry.id) ?? this.pendingNotifications.get(entry.id) ?? durableRecovery,
+                    recovery,
                 });
             }
         }

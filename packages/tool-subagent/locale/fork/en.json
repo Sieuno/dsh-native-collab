@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Start subagent with context",
-    "description": "Starts a subagent that inherits the current conversation context for continuation or follow-up tasks."
-  }
-}

@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "子 Agent 消息控制",
-    "description": "向已启动的子 Agent 发送补充消息或中断当前执行。"
-  }
-}

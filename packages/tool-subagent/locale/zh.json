@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "启动独立子 Agent",
-    "description": "为新任务启动独立的子 Agent，支持按需指定模型与执行任务。"
-  }
-}

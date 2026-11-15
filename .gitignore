@@ -1,8 +1,30 @@
+# Installed dependencies and local package-manager caches.
 node_modules/
-dist/.build-tmp/
-*.tgz
-.env*
-.DS_Store
+.npm-cache/
+.pnpm-store/
 
+# Local investigation, generated fixtures, and upstream checkout.
 .test-artifacts/
 _sdk_typings/
+/deepseek-harness/
+
+# Generated packages and test reports; shipped dist files and regression tests stay tracked.
+/dist/.build-tmp/
+/release-assets/
+/release-notes.md
+/coverage/
+/playwright-report/
+/test-results/
+*.tgz
+*.tgz.sha256
+*.tsbuildinfo
+*.log
+*.tmp
+*.temp
+*.bak
+
+# Local environment and operating-system metadata.
+.env*
+.DS_Store
+Thumbs.db
+Desktop.ini

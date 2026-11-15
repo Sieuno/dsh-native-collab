@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "子 Agent 列表",
-    "description": "列出当前会话启动的子 Agent 及其运行状态。"
-  }
-}

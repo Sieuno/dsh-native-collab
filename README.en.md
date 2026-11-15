@@ -1,61 +1,105 @@
-# DSH Native Collab · Native Collaboration Enhancements
+# DSH Native Collab · Native Collaboration Extensions
 
-**DeepSeek Harness agent collaboration enhancements (based on the original plugin)**: child Agent communication enhancements, Team/Subagent identity exchange, flexible model selection, and runtime limit management for DeepSeek Harness (DSH). An **unofficial community plugin** derived from DSH (not an official distribution).
+**DeepSeek Harness agent collaboration enhancements (based on the original plugin)**: Lightweight incremental extensions built on top of the official DeepSeek Harness (DSH) collaboration system, providing dynamic model sources, tree-wide automatic message allowances, and improved delegation prompts. Licensed under the MIT License.
 
-[中文](https://github.com/Sieuno/dsh-native-collab/blob/main/README.md) · [Installation Guide](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/INSTALL.en.md) · [FAQ](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.en.md) · [Issues](https://github.com/Sieuno/dsh-native-collab/issues)
+This project is an **unofficial community plugin** (neither an official distribution nor endorsed by DeepSeek).
+
+[中文](README.md) · [Installation Guide](docs/INSTALL.en.md) · [FAQ](docs/FAQ.en.md) · [Testing](TESTING.md) · [Issues](https://github.com/Sieuno/dsh-native-collab/issues)
 
 ---
 
 ## Compatibility
 
-Starting with **0.3.1**, a single plugin package supports the DSH **0.2.1 (from rc.1) and 0.2.2 series, including prereleases**. Versions 0.3.0 and earlier support only the 0.2.1 series. The plugin requires Node.js ≥22.19.0; when using DSH 0.2.2, you must also meet the host requirement of Node.js ≥24.9.0.
+This architecture targets **DeepSeek Harness 0.2.2-rc.2 and 0.2.2-rc.3**, requiring **Node.js ≥24.9.0**.
 
-## Installation & Quick Start
+- **Legacy Host Compatibility**: This architecture drops support for DSH 0.2.1 and older 0.2.2-alpha / rc.1 releases. For older hosts, please continue using the published plugin release **0.3.5**.
+- **Future Version Notice**: Does not claim blanket compatibility with unreviewed future prereleases or arbitrary 0.2.2 variants; future host releases require separate review.
 
-Install into **the Profile you currently use**; there is no need to stop the running instance first (installation only writes dependencies into that Profile). Replace `<profile>` with your Profile name (the GUI default is usually `web`):
+## Architecture & Core Changes
 
-```sh
-dsh plugin --profile <profile> add @sieuno/dsh-native-collab
-```
+Now that official DSH has unified the Team and Subagent collaboration tree, this project has been refactored from "replacing the entire official collaboration runtime" to **"providing lightweight incremental extensions on top of official collaboration tools"**:
 
-Restart DSH after enabling or disabling the plugin for the change to take effect.
-
-After the restart, open the plugin management page:
-
-- **Subagent Settings**: This plugin’s settings page edits the native maximum recursion depth and parallelism on behalf of the unavailable native page. Values load automatically; valid changes save back to the original `subagent` configuration. Subsequent delegation and capacity admission use the same source, and switching back to native services preserves it. Existing depth rules are unchanged.
-- **Enhancement Preferences Save Automatically**: Communication, model source, and automatic wake-up preferences save automatically; unconfirmed or failed saves show an error beside the affected item.
-- **Activation**: Model source changes apply immediately to subsequent model queries and Agent creation; startup settings, including enhancement toggles and the consecutive automatic wake-up limit, apply after you shut down the service normally as prompted and restart the same Profile (a browser refresh alone is not a restart).
-- **Uninstallation & Cleanup**: Disable the plugin first, then restart the same Profile and confirm that native services have been restored before uninstalling. If startup overlays still reference the plugin, uninstalling it directly may prevent DSH from starting because the plugin can no longer be found. See the recovery steps in the [FAQ](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.en.md).
-- **Startup Troubleshooting**: If DSH fails to start after uninstalling or downgrading the plugin, first check whether any `*.patch.json` external startup overlay under the Profile directory still references this plugin, then clean stale rows from the Profile patch; see the [FAQ](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/FAQ.en.md) for the steps.
+- **Complete Official Core Reuse**: Directly reuses the official tools installed with the host, preserving native parameter validation, model adapter checks, authorization, member discovery, session creation, completion notifications, cold restoration, and task boards.
+- **Scoped Context Interception**: Injects model policies and communication guards strictly within the local invocation context of official tools, without replacing global background services or rewriting Agent presets.
+- **Removed Redundancies**: Since official Teams already support unified messaging and membership under the same collaboration tree, this release removes the former standalone Team roster, custom collaboration UI panels, and the complex Team/Subagent identity exchange system.
 
 ## Main Features
 
 | Feature | Description |
 |---|---|
-| Team / Subagent Identity Exchange | Convert direct, idle subagents under the current Lead into Team members, or turn Team members into standalone subagents from the conversation header popover; preserves session ID, chat history, model configuration, and working directory with built-in safety checks. |
-| Child Agent communication enhancements | The plugin settings page provides a main enhancement switch plus "accept additional instructions while working" and "allow continuing completed child conversations"; disabling enhancements retains native capabilities and permission rules. |
-| Model selection for Team and child Agents | Three model sources: the child model list set at conversation start, the child model list in current DSH settings, and all models currently available in DSH; the latter two are re-read on every query or Agent creation, subject to model adapter and permission checks. |
-| Subagent runtime limit configuration | Directly read and configure maximum recursion depth and concurrency limits from the plugin settings page, synchronized directly with native `subagent` settings without maintaining duplicate stores. |
-| Consecutive automatic wake-up limit | 32 rounds by default, shared by all Agents associated with the session to prevent multi-agent loops; only consecutive automatic wake-ups without user input are counted, user input or a process restart resets the count, and automatic child-task completion/stop reports are exempt. |
+| **Dynamic Model Sources** | Provides three model source modes for newly delegated child agents: `conversation` (default, retains session authorization), `settings` (re-reads current native child model settings per call), and `all` (re-reads registered providers per call, subject to official adapter validation). Applies only to fresh child delegation; fork retains official parameters and inheritance rules. |
+| **Shared Automatic Message Allowance** | 32 messages by default, shared across all agents in the entire collaboration tree to prevent infinite loops. Counts only successfully delivered ordinary model messages (refunds on send failures; native completion notices do not count), and resets upon user input, question replies, or process restarts. Reports submitted via `task_result: true` to the direct parent are exempt. |
+| **Concise Delegation Guidance** | Retains official system prompts while injecting lightweight delegation principles: directly handle small tasks, minimize redundant context, and coordinate when blocked; fully leverages official automatic result delivery. |
+| **Native Host Settings & Panels** | Recursion depth and concurrency limits are managed natively through official subagent settings without maintaining duplicate stores; the plugin detail page provides a streamlined settings form; progress is viewed directly in official session Team panels or task cards. |
 
-The plugin provides the same tools as the native client, but rewrites their implementations. This greatly improves the experience of working with child conversations/Subagents without injecting a bulky set of additional tools.
+### 1. Dynamic Model Sources
+
+The plugin provides three dynamic source modes for fresh child agent creation (`subagent` tool) and model discovery (`list_subagent_models`):
+
+- `conversation` (default): Reuses native child model authorizations saved in the session; falls back to official parent model constraints when none are recorded.
+- `settings`: Re-reads current official child model settings on each query or explicit selection, rather than substituting obsolete session lists. Rejects explicit selection when native child model selection is disabled; unselected calls follow official inheritance.
+- `all`: Inspects all currently registered model providers on each call. Models published by adapters are listed; unlisted exact model IDs still require validation by official adapters before creation.
+
+Dynamic sources do not alter authorization records stored in session history, nor do they bypass official checks for model existence, reasoning tier, or provider capabilities. `subagent_fork` strictly preserves official inheritance and configuration without injecting extra selection parameters. The settings page contains only model source and automatic wake message limit. Model source defaults to Official default policy without removing native selection capabilities.
+
+### 2. Message Delivery
+
+**Note**: This plugin no longer offers the model-side `queue` option (which queued messages for a later turn), and uniformly reuses official `send_message` `steer` delivery: target agents receive guidance at step boundaries, and idle targets can initiate a new turn without forcibly interrupting active model requests or tool executions (official user-side delivery still supports queuing). Passing the legacy `delivery` parameter produces an explicit error. Successful delivery indicates inbox acceptance, not that the request has already been processed or answered.
+
+### 3. Shared Automatic Message Allowance
+
+To prevent multi-agent loops during autonomous collaboration, the plugin enforces a tree-wide automatic message allowance:
+
+- **Accounting Rules**: Default ceiling of **32 messages**, shared by all agents within the collaboration tree. Each ordinary model message sent via the adapted official `send_message` and accepted by the destination inbox counts as 1; failed deliveries refund the reserved count.
+- **Reset Mechanism**: Any user input or user response to a question prompt resets the counter to zero; process restarts also reinitialize the counter.
+- **Exhaustion Behavior**: Reaching the limit rejects only that specific outgoing message with a clear explanatory error; it does not stop, cancel, or terminate any agent, nor does it constrain subsequent user input or the agent's internal reasoning. When exhausted, agents should await human intervention rather than looping retries.
+- **Result Report Exemption**: Official task completion notices do not pass through this counter and consume no allowance. In addition, child agents can submit final completed-task reports to their **direct parent** using `task_result: true`, which is exempt (ordinary messages, peer messages, or downward messages cannot abuse this flag).
+- **Scope Boundary**: Guards apply solely to official model tools adapted by this plugin; third-party plugins directly calling low-level service APIs are not restricted.
 
 ## Usage Recommendations
 
-This plugin suits lightweight collaboration such as prototyping, routine project maintenance, and personal development. Choose a collaboration approach based on task dependencies and coordination complexity, not project size alone. If you need more elaborate team organization and workflows, consider a more comprehensive solution such as [dsh-agent-teams](https://github.com/NanmiCoder/dsh-agent-teams).
+- **Lightweight Collaboration Scope**: Designed for routine project maintenance, prototyping, and lightweight multi-role exploration. If your project requires complex team choreography or large-scale staged pipelines, consider more extensive orchestration frameworks.
+- **Delegation Rhythm**: Directly process small or tightly coupled tasks with the current agent. Delegate only when division of labor provides clear benefit, avoiding unnecessary context duplication.
+- **Use Native Completion Notices**: While the parent Agent remains loaded by the host, official completion notices return child results and wake an idle parent, usually without another `send_message` summary. Ending a turn does not prevent this wake-up. Completion notices do not restore a released parent instance; see the [FAQ](docs/FAQ.en.md) for the distinction.
+- **Named Collaboration & Teams**: Standard child agents support custom names and tree communication; enable session-level Team mode only when you require shared task boards or persistent oversight.
 
-The plugin retains the official collaboration system's task assignment and division of responsibilities, enhancing existing tools rather than adding a large new toolset. Start with a capable **Lead + role-specific Subagents**, choose suitable models for each role, and define responsibilities, inputs, deliverables, and acceptance criteria. Use Team when you need long-lived named members, ongoing collaboration, or a shared task board. Share your experiences in Discussions!
+## Installation & Configuration
 
-## Runtime & Adaptation Mechanism
+### Installation Command
 
-The plugin patch inserts only one management entry, which manages three backend services. The three native root services and the management entry are mutually exclusive: enabling the entry runs the enhanced managed services; disabling it and restarting DSH restores native services.
+Install into the Profile you currently use:
 
-Four collaboration tools are dynamically adapted in memory for the four known AgentPresets by module identity and ID, without modifying or pinning users' existing preset files or affecting unknown custom providers.
+```sh
+dsh plugin --profile <profile> add @sieuno/dsh-native-collab
+```
 
-Service switching uses DSH's Profile patch mechanism; this plugin does not append a `--override` startup argument. When the management entry is enabled, the patch disables the three corresponding native root services to avoid running duplicate providers alongside the enhanced services. The four root-level tools from the official experimental package remain disabled. If a local launcher generates additional external startup overlays, check them for stale references as described in the FAQ.
+> **Note**: Before version 0.4.0 is published to npm, running the package-name command fetches the older 0.3.5 release. To test prior to release, install the built `.tgz` archive (`dsh plugin --profile <profile> add /path/to/sieuno-dsh-native-collab-0.4.0.tgz`). After official publication, the package-name command installs 0.4.0 directly.
 
-## Development & License
+### Activation & Workflow
 
-[Contributing](https://github.com/Sieuno/dsh-native-collab/blob/main/CONTRIBUTING.md) · [Testing](https://github.com/Sieuno/dsh-native-collab/blob/main/TESTING.md) · [Changelog](https://github.com/Sieuno/dsh-native-collab/blob/main/CHANGELOG.md).
+1. **Restart Profile**: Restart the same Profile normally after installing, enabling, or disabling the plugin (refreshing the web browser is not a service restart).
+2. **Plugin Settings Form**: Open this plugin's detail page under Plugins → Installed to configure "Subagent model source" and "Automatic wake message limit". Click Save to apply changes to subsequent tool calls immediately.
+3. **Native Runtime Limits**: Maximum recursion depth, concurrency limits, Team mode toggles, and task boards are configured directly through official host settings.
+4. **Disabling the plugin**: Use the package's main switch and restart the same Profile rather than disabling only its internal component.
 
-Based on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), licensed under the [MIT License](https://github.com/Sieuno/dsh-native-collab/blob/main/LICENSE), with copyright and NOTICE information retained. See [UPSTREAM.md](https://github.com/Sieuno/dsh-native-collab/blob/main/UPSTREAM.md) and [THIRD_PARTY_NOTICES.md](https://github.com/Sieuno/dsh-native-collab/blob/main/THIRD_PARTY_NOTICES.md) for upstream sources and third-party notices.
+## Upgrading & Legacy Considerations
+
+- **Legacy Identity Exchange Records**: Older plugin releases wrote `team/member` v3 extension records into session logs. This branch does not automatically migrate those records, nor does it guarantee lossless native playback for converted sessions. **Back up your Profile configuration and session data before upgrading**, and verify in fresh sessions within an isolated Profile.
+- **Stale Startup Overlays**: If DSH fails to start after upgrading or uninstalling older releases, check whether `cordis.patch.yml` in the Profile directory or launcher-generated `*.patch.json` files retain obsolete references to retired subpaths (such as `/subagent`, `/agent-team`, or `/tool-*`). Follow the [FAQ](docs/FAQ.en.md) to clean only stale entries belonging to this plugin without clearing unrelated settings.
+
+## Testing & Validation
+
+The local development environment (Windows / Node 24) has verified:
+
+- 10 base contract, package manifest, and release configuration checks;
+- 24 SDK and runtime integration tests per locked DSH 0.2.2-rc.2 and 0.2.2-rc.3 SDK, covering tools, Loader assembly, settings forms, and real AgentLoop / Subagent / presets / Team / JSONL persistence;
+- Strict type checking across both SDK target declarations;
+- Build consistency verification (`node scripts/native-build.mjs --check`) and `npm pack --dry-run` packaging checks.
+
+*Note: Verification does not claim end-to-end acceptance against live commercial model APIs, desktop/browser DOM interactions, full installed Profile lifecycles, or legacy session migration. See [TESTING.md](TESTING.md) for tiered evidence boundaries.*
+
+## License & Notices
+
+[Contributing](CONTRIBUTING.md) · [Testing](TESTING.md) · [Changelog](CHANGELOG.md).
+
+Derived from [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), licensed under the [MIT License](LICENSE), with original copyrights and NOTICE preserved. See [UPSTREAM.md](UPSTREAM.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for upstream source notices.

@@ -10,7 +10,7 @@ This project is an **unofficial community plugin** (neither an official distribu
 
 ## Compatibility
 
-This architecture targets **DeepSeek Harness 0.2.2-rc.2 and 0.2.2-rc.3**, requiring **Node.js ≥24.9.0**.
+This plugin supports **DeepSeek Harness 0.2.2-rc.2 and 0.2.2-rc.3**, requiring **Node.js ≥24.9.0**.
 
 - **Legacy Host Compatibility**: This architecture drops support for DSH 0.2.1 and older 0.2.2-alpha / rc.1 releases. For older hosts, please continue using the published plugin release **0.3.5**.
 - **Future Version Notice**: Does not claim blanket compatibility with unreviewed future prereleases or arbitrary 0.2.2 variants; future host releases require separate review.
@@ -84,7 +84,7 @@ dsh plugin --profile <profile> add @sieuno/dsh-native-collab
 
 ## Upgrading & Legacy Considerations
 
-- **Legacy Identity Exchange Records**: Older plugin releases wrote `team/member` v3 extension records into session logs. This branch does not automatically migrate those records, nor does it guarantee lossless native playback for converted sessions. **Back up your Profile configuration and session data before upgrading**, and verify in fresh sessions within an isolated Profile.
+- **Legacy Identity Exchange Records**: Older plugin releases wrote `team/member` v3 extension records into session logs. The current plugin does not automatically migrate those records, nor does it guarantee lossless native playback for converted sessions. **Back up your Profile configuration and session data before upgrading**, and verify in fresh sessions within an isolated Profile.
 - **Stale Startup Overlays**: If DSH fails to start after upgrading or uninstalling older releases, check whether `cordis.patch.yml` in the Profile directory or launcher-generated `*.patch.json` files retain obsolete references to retired subpaths (such as `/subagent`, `/agent-team`, or `/tool-*`). Follow the [FAQ](docs/FAQ.en.md) to clean only stale entries belonging to this plugin without clearing unrelated settings.
 
 ## Testing & Validation

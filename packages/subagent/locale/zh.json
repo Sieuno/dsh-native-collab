@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "子 Agent 运行服务",
-    "description": "提供子 Agent 启动、生命周期管理与上下文传递的后台服务。"
-  }
-}

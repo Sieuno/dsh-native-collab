@@ -1,7 +1,7 @@
 # 上游来源
 
-本项目基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 
+本项目是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 官方协作插件的非官方扩展，当前适配基线为 dsh-v0.2.2-rc.2 与 dsh-v0.2.2-rc.3。
 
-包含 agent-team、subagent、tool-agent-team、tool-subagent、tool-subagent-control 的派生源码与资源。宿主 DSH/Cordis 由运行环境提供，不随插件复制。
+新架构直接调用宿主安装的官方工具，不再捆绑 agent-team、subagent 或协作工具的派生运行时。官方包保留其自身的许可和版权；本项目保留 MIT 许可、既有 DeepSeek 版权及历史来源说明。
 
-本项目为独立维护的非官方社区插件。保留 [MIT 许可](LICENSE)、DeepSeek 版权及包内 NOTICE，详见[第三方声明](THIRD_PARTY_NOTICES.md)。
+宿主 DSH/Cordis 由运行环境提供，以可选 peer 声明，不复制进发布包。历史派生实现可在 Git 历史中查阅。详见 THIRD_PARTY_NOTICES.md。

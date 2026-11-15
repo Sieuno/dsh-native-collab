@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Child Agent runtime",
-    "description": "Backend service for subagent execution and lifecycle management."
-  }
-}

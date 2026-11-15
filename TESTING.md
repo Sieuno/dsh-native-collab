@@ -1,85 +1,28 @@
-# 测试与验收
+# 测试与证据范围
 
-## 组织与边界
+使用 Node.js ≥24.9.0。根目录开发依赖通过 npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund 安装。SDK 是独立、精确锁定的开发环境，不进入发布包：
 
-- 测试按功能维护，不按插件版本复制；历史由 Git 管理。每个 `tests/*.test.mjs` 文件必须在 [runner](scripts/test.mjs) 中且只登记一次，缺少前提时明确失败，不静默跳过。
-- 浏览器工厂加载、构建时数据注入和元素遍历共用 [browser-fixture.mjs](tests/browser-fixture.mjs)；元素渲染与协议夹具不是实际浏览器验收。
-- 版本契约只检查合法格式及 manifest/lockfile 一致，不写死试用版本号。临时输出放入忽略目录 `.test-artifacts`，不在仓库保存维护笔记、问题清单或回归报告。各层的证明边界、声明纪律与合并/删除判据见[项目审查要求](https://github.com/Sieuno/dsh-native-collab/blob/main/docs/REVIEW.md)（内部文档，不随 npm 包分发）。
+```sh
+pnpm --dir .github/sdk/native install --frozen-lockfile --ignore-scripts --config.auto-install-peers=true
+pnpm --dir .github/sdk/native-rc2 install --frozen-lockfile --ignore-scripts --config.auto-install-peers=true
+```
 
-## 构建、类型与隔离加载
+native 对应 rc.3，native-rc2 对应 rc.2。默认使用 native；指定 DSH_NATIVE_SDK=.github/sdk/native-rc2 可切换到 rc.2。在 PowerShell 中使用 $env:DSH_NATIVE_SDK 设置环境变量。
 
 ```sh
 npm run build
-node scripts/emit-dist.mjs --check
-npm run check:types -- --sdk-types-map <已有Host-SDK声明映射.json> --type-root <已有Node声明目录>
-node scripts/ci/prepare-client-types-map.mjs --target rc2 --node-modules .github/client/rc2/node_modules
-npm run check:client-types -- --sdk-types-map .test-artifacts/client-types/rc2-types-map.json --type-root .github/client/rc2/node_modules/@types --report .test-artifacts/client-types/rc2.json
-npm run check:load -- --sdk-map <已有SDK模块映射.json> --read-root <允许只读的依赖目录>
+node scripts/native-build.mjs --check
 npm run validate:package
-```
-
-构建只转译和检查 JS 语法，不做完整类型检查。额外的静态导入检查需要对应版本真实的 Cordis 与 Schemastery 声明（rc2：4.0.5 / 3.18.5；alpha2：4.0.6-alpha.1 / 3.18.6-alpha.1）；仅执行 `npm ci --legacy-peer-deps` 不会安装这些可选 SDK peer，而可选 peer 的显式 `npm install --no-save` 也不会真正安装。基础 CI 用共享 action 的 `npm pack --ignore-scripts` 把这两个已发布包解包到 `node_modules`（不改写 lockfile、不把声明提交进仓库），再以 `DSH_HOST_CONTRACT=require` 运行静态契约检查，声明缺失即失败。SDK 集成 job 另行安装下面的独立锁文件环境，不把仅有声明当成可执行 SDK。本机没有声明时会打印跳过提示并继续；设置 `DSH_HOST_CONTRACT=require` 可要求必须检查。`--check` 使用同一构建流程只读比对所有产物，缺失、内容不同或无源码对应的多余 JS 均失败，不重写文件。
-
-服务端严格类型层 `check:types` 检查 Host/插件 `.ts` 源码；两个 browser-panel `.tsx` 由独立的 `check:client-types` client lane 检查，不能与 server SDK 声明置于同一 TypeScript program：ClientRemote 对 Cordis `Context.sessions` 的声明会与 Host SessionStore 扩展冲突。Client lane 使用 `.github/client/{rc2,alpha2}/package-lock.json` 固定的真实发布类型依赖，版本分别是 0.2.1-rc.2 与 0.2.2-alpha.2、React/ReactDOM 18.3.1；map 生成器按 package exports 解析声明，递归核验可达 DeepSeek 类型依赖并校验每个 DSH 包的精确 lane 版本；任一声明包缺失即失败。只读取这些包的声明，不执行其 JS，也不代表真实浏览器、客户端通信或 Host 启动测试。
-
-这些命令不会安装 SDK。映射仅在标准解析找不到已有依赖时提供：类型映射是模块名到已有 `.d.ts` 文件路径的 JSON 对象；模块映射是模块名到已有实际 JS 入口路径的 JSON 对象，不能用空对象或伪造导出替代 SDK。Host 类型映射用于 `check:types`，Client 类型映射用于隔离的 `check:client-types`；两者都只映射调用者已安装的真实 `.d.ts` 文件。两个检查程序均启用 `strict`、`noEmit`；`skipLibCheck` 只跳过依赖声明内部检查，不等于验证宿主全部源码。client 声明映射缺失时 client lane 显式失败，不能用空对象或伪造导出代替。
-
-隔离加载逐个求值发货 JS 和公开 JS 入口，调用真实配置 schema；内存 Cordis Context 检查管理入口的依赖就绪及接管拒绝行为。子进程禁止写文件、限制读取目录、阻止网络和子进程创建，不打开真实 Profile。浏览器入口只检查注册。验收脚本需要支持 `registerHooks` 和权限模型的 Node；不能据此推定声明的全部 Node 范围均已通过。
-
-## 功能测试分层
-
-| 层 | 命令 | 文件数 | 依赖与范围 |
-|---|---|---:|---|
-| 本地契约 / UI 单元 | `npm test` | 25 | 本地依赖、构建产物和元素/协议夹具，含不需要 SDK 的模型选择策略；不启动真实 Host |
-| SDK / 隔离集成 | `npm run test:sdk` | 8 | 匹配的可执行 SDK；不要求官方源码 |
-| 官方设置源码契约 | `npm run test:source` | 1 | 匹配 SDK、`DSH_COMPAT_TARGET`、`DSH_SDK_ENVIRONMENT`、`DSH_SOURCE_ROOT`；在临时文件上执行官方设置与配置编辑源码 |
-| 官方客户端协议 | `npm run test:client` | 1 | `DSH_OFFICIAL_ASAR`；真实 ClientRemote 的离线连接断言 |
-| 官方发现 / roster | `npm run test:discovery` | 1 | 匹配 SDK、`DSH_COMPAT_TARGET`、`DSH_SDK_ENVIRONMENT`、`DSH_OFFICIAL_SOURCE_ROOT`；官方 roster 原文哈希校验 |
-
-共 36 个功能测试文件。文件数以 [scripts/test.mjs](scripts/test.mjs) 的登记表为准；登记表与实际文件不一致时，`scripts/test.mjs` 会先失败。可在一次调用中选择多层，例如 `node scripts/test.mjs unit sdk`；同一文件不会重复执行。
-
-原生运行限制的本地测试使用临时 YAML 与显式配置编辑器适配器，检查原生条目单一来源、版本冲突、覆盖拒绝、局部保存、共享 YAML 锚点 / 别名拒写及失败回滚；客户端元素夹具检查自动读取、乱序响应不覆盖新快照或草稿、串行防抖保存、无手动按钮和失败草稿。SDK 用真实运行时读限回调与容量池检查后续准入，不等于真实 Host 安装、RPC、完整 Loader 重载或浏览器端到端验收。
-
-本地层覆盖自动唤醒守卫/路由、模型来源、自动保存、管理生命周期、状态诊断词典和发布契约。旧请求预算、Host 提示豁免和不取消 Agent 的源码断言已归入 [auto-wake-routing.test.mjs](tests/auto-wake-routing.test.mjs)，不再单设伪 Host 层。`team-membership.test.mjs` 直接加载带可选 Host SDK peer 的发货 projection，属于 SDK 层并随其真实 SDK lane 运行，不属于本地单元层。SDK 层覆盖投影、子对话引导、注册/通信、状态与生命周期；模型选择纯策略已移入本地层，官方设置源码契约独立为 source 层。
-
-## CI 与复现
-
-- [基础检查](.github/workflows/verify.yml) 在分支 push、PR 和手动触发时调用[共享门禁](.github/workflows/checks.yml)。本地层在 Linux / Node 22.19.0、Windows / Node 22.19.0 和 Linux / Node 24 上运行，并检查已提交构建产物、发布契约及 dry-run 打包。构建检查不允许悄悄重写 dist；[.gitattributes](.gitattributes) 固定文本 LF，避免 Windows checkout 的 CRLF 转换造成伪产物差异。
-- SDK job 分为 rc2 / Node 22.19.0 与 alpha2 / Node 24.19.0 两条独立 lane，分别使用 [.github/sdk/package-lock.json](.github/sdk/package-lock.json) 与 [.github/sdk/alpha2/package-lock.json](.github/sdk/alpha2/package-lock.json) 固定真实公开运行时及传递依赖；不混装两代声明。安装禁用生命周期脚本，随后执行 Host/backend `.ts` 源码 strict 类型检查、权限隔离加载与相同的 8 个 SDK 测试文件。不要用伪造模块、空声明或跳过测试来修复供应失败。
-- Client types job 同样使用版本清单的 rc2 / alpha2 matrix 与 Node 版本，分别从 [.github/client/rc2/package-lock.json](.github/client/rc2/package-lock.json) 和 [.github/client/alpha2/package-lock.json](.github/client/alpha2/package-lock.json) 以 `npm ci --ignore-scripts --legacy-peer-deps` 安装仅供类型检查的真实发布声明，执行独立 `check:client-types`。这避免 Client 的 `Context.sessions` augmentation 污染 Host/backend `Context.sessions` 类型；声明被载入但其 JS 不执行。此 job 只证明两个固定lane的浏览器面板编译期契约，不是浏览器运行或 Host E2E。
-- [官方源码契约](.github/workflows/source-contracts.yml) 同样属于共享门禁，并声明独立手动入口与每周一 04:43 UTC 的重跑计划。GitHub 的 schedule 只在默认分支运行；周测工作流必须先部署到默认分支，仅在 Develop 声明不代表定时监控已启用。实际定时覆盖的代码以调度检出的 ref 为准，不能自动视为 Develop；部署后须核对真实 schedule 运行记录。与 SDK job 一样从[版本清单](scripts/host-compatibility.mjs)生成矩阵，rc2 / alpha2 各自使用对应 Node、锁定 SDK、精确上游提交及 roster SHA256；检出后核对提交，执行前再核对 Git HEAD / 干净工作树、源码与 SDK 版本和 roster 原文；本地复现同样拒绝无 Git 身份的快照或已修改的检出。设置源码与发现机制两个文件在每条 lane 上执行，不安装或构建整个上游工作区。
-- 最新 Cordis / Schemastery 声明仅作兼容探测：只解析 Cordis `^4` 与 Schemastery `^3`，执行静态导入契约与产物比对，不解析最新 DSH SDK、不做完整类型或运行时测试。普通 push / PR 不阻断，定时探测失败会直接使该定时工作流失败。daily schedule 仅运行该探测，不调用完整共享门禁；同样只在默认分支生效。它不替换固定 SDK 门禁，也不代表 Develop 每日完成全套回归。
-- [发布工作流](.github/workflows/release.yml) 必须等待同一套共享门禁成功，才会打包、创建 Release；不会用另一套较弱的测试替代发布前验证。
-
-复现固定 SDK 层（先安装根依赖，再安装独立 SDK；不会修改根 lockfile）：
-
-```sh
-npm ci --ignore-scripts --legacy-peer-deps
-node scripts/ci/prepare-sdk.mjs --target rc2 # alpha2 使用 --target alpha2；每条 lane 从独立、干净目录开始
-export DSH_SDK_ENVIRONMENT=sdk-only # PowerShell: $env:DSH_SDK_ENVIRONMENT="sdk-only"
-node scripts/emit-dist.mjs --check
+npm test
 npm run check:types
-npm run check:load
 npm run test:sdk
-export DSH_COMPAT_TARGET=rc2 # 必须与已准备的 SDK 相同；alpha2 使用 alpha2
-# 设置源码测试另需 DSH_SOURCE_ROOT；发现层另需 DSH_OFFICIAL_SOURCE_ROOT，
-# 均指向版本清单中对应 source.ref 的官方源码。
-# 可用 DSH_TEST_ARTIFACTS 将发现层临时输出放到仓库外。
-node scripts/test.mjs source discovery
+npm pack --dry-run --ignore-scripts
 ```
 
-SDK 准备脚本要求 Cordis、Schemastery、zod 单例，并拒绝暴露 `@deepseek-ai/dsh-settings`、`@deepseek-ai/dsh-config-editor`、`@deepseek-ai/dsh-app-boot`；后者是现有运行时测试的环境负契约，不要把官方工作区 node_modules 全量链接进来。SDK 和类型检查只使用真实已安装包，设置契约额外需要已固定的官方源码和显式安装的 js-yaml。
+- 构建与 --check：转译、语法检查及提交产物一致性，不证明类型或宿主行为。
+- npm test：计数预留、配置与发布边界，不需要宿主 SDK。
+- check:types：针对所选官方已发布 SDK 声明进行 strict 类型检查，skipLibCheck 不检查依赖内部实现。缺少 SDK 直接失败。
+- test:sdk：native-tools 使用真实官方工具、配置 Loader 和执行器，在服务边界替换外部依赖；native-startup 读取实际插件 patch，验证装配、不加载插件补丁时的原生启动及工具重载；native-host 使用真实 AgentLoop、Subagent、预设、Team、JSONL 持久化和查询服务，以及脚本模型和目录协作者，验证自动完成、冷恢复、唤醒额度和任务归属。它不是完整已安装 Profile 的启停、卸载验收。
+- settings-client 使用所选官方 SDK 发布的表单模型与 React 控件，验证仅保留两个设置项的双语静态渲染、模型来源与额度控件经原生 Loader 保存并影响后续调用，以及旧模型设置映射、恢复默认、校验、只读和保存失败。槽位与传输由夹具提供，CSS 未在 Node 中渲染；这不等同于真实浏览器或已安装 Profile 的验收。测试所需 React、表单与状态库仅装在两套开发 SDK 中，不随插件发货。
 
-共 36 个功能文件中，CI 门禁覆盖 35 个；唯一未自动运行的是依赖安装版 ASAR 的客户端协议文件。目前尚无经审计、带固定校验值的独立官方 rc.2 ASAR 下载源，故保留 `DSH_OFFICIAL_ASAR=... npm run test:client` 的本地验收方式，不下载或执行桌面安装器，也不把缺少 ASAR 显示成通过。以上绿灯都不代表真实 Host 或浏览器端到端验收。
-
-### 版本差异的维护边界
-
-[版本策略](scripts/host-compatibility.mjs) 集中定义精确 SDK lane、独立锁文件目录、上游提交、roster SHA256 和宿主声明；[矩阵生成器](scripts/ci/compatibility-targets.mjs) 供 SDK 与源码工作流共用，拒绝移动 ref、重复版本/目录和未实现的执行模式。增加已审查版本时，新增清单项及其独立 SDK manifest/lockfile，审查源码差异后固定 commit/hash；无需再复制 workflow 中的版本列表。声明支持 0.2.1（自 rc.1 起）及 0.2.2 系列（含预发布版）；锁定 lane 是可复现回归样本，不是支持上限，也不表示已逐个实测系列内所有版本。支持策略与测试采样分开维护；上游来源说明不再绑定单一开发基线，源码测试仍必须固定提交和哈希。SDK 的[执行适配器](tests/sdk-execution-fixture.mjs) 按清单的 `single` / `batch` 契约选取执行方式，实际路由断言不分叉；新 API 若不属于已有模式，必须先显式实现边界适配，不依靠捕获异常后猜测旧 API。`DSH_SDK_ENVIRONMENT` 必须显式设置：`sdk-only` 要求三个 Host 包不可解析；已有完整官方 Host 依赖树可选 `host`，此时验证 app-boot 包身份同版，但绝不求值该 Host 模块，不能把这一模式称为真实 Host 启动测试。
-
-[投影兼容层](packages/subagent/src/projection-compat.ts) 处理旧 disposer 与新 handle promise；不得在注册时 await 旧 callable-thenable 而提前释放投影。注册释放与 schema 校验的单元测试只证明该边界，SDK 测试才使用真实投影注册。source / discovery 已覆盖清单中的 rc2 和 alpha2：设置描述断言运行时值、继承层及用户层，发现层断言启用根入口且排除禁用项与子路径。设置夹具的 Profile 合并、协调与锁仍为显式单条目适配；不证明完整 Loader、原子写、RPC 或 Host 生命周期。ASAR 客户端协议夹具仍只针对原 rc2 安装版，不把矩阵绿灯称为 alpha2 客户端协议或真实浏览器验收。
-
-## 外部验收前提
-
-`DSH_SOURCE_ROOT` 指向匹配版本清单精确提交的干净 Git 源码检出（含 Git 元数据，不接受解压快照）；发现层另外直接读取官方 roster 源码，不依赖额外适配器入口。`DSH_OFFICIAL_ASAR` 指向已安装的客户端协议 asar。`DSH_TYPESCRIPT_ENTRY` 可指向已有兼容 TypeScript，测试不会自动安装依赖。所有外部路径均由调用者显式提供，不访问当前真实 Profile。
-
-`npm test` 不是完整集成验收。模块导入、配置解析、源码断言或 SDK 工具注册通过，都不等于真实 Team 创建、任务执行、卸载恢复和浏览器交互已通过。真实 Host 验收应使用临时配置、模拟模型与独立数据目录，不访问真实账号、真实会话或付费模型。CI 的构建和本地层不能替代这些验收。
+没有真实模型 API、桌面/网页交互、原生配置表单浏览器行为或旧版身份转换会话迁移的完整验收。不得将这些检查合称全量 E2E。CI 在两个支持 SDK 上分别运行，并配置 Linux 和 Windows；本地结果不代表 CI 已经执行。

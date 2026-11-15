@@ -1,69 +1,61 @@
 # Frequently Asked Questions (FAQ)
 
-## How do I enable features after installation?
+## Why are the custom Team panel and "identity conversion" gone?
 
-Configure options in the plugin management page. Subagent settings and enhancement preferences load and save automatically. Normal saves need no manual migration and do not hot-migrate running agents. Restart the Profile normally for settings that require it (browser refresh alone is not a restart).
+In DSH `0.2.2-rc.2 / rc.3`, the official architecture fully unified Teams with Subagents. All team members are now managed natively within the Subagent tree, complete with built-in member discovery, task boards, and session Team mode.
 
-## Why did my active conversation not change after saving?
+Instead of replacing or duplicating these official services, this plugin embraces the official native infrastructure. The old identity-conversion mechanism is replaced by the official member model. The plugin provides model-source selection, an automatic message allowance to prevent loops, and improved delegation prompts.
 
-Feature toggles and consecutive automatic wake-up limits are startup settings that take effect on restart for new sessions or turns. Model source settings apply to subsequent queries and creation. In-memory wake-up counters reset on restart.
+## How are settings saved? Why is there no custom autosave UI?
 
-## Why are limits missing from the native Subagent page, and how can I edit them?
+Go to **Plugins → Installed** and open this plugin's detail page to access the settings form (featuring "Subagent model source" and "Automatic wake message limit").
 
-Managed takeover disables the native service entry, so the native page may show only model selection. Use **Subagent settings** on this plugin’s settings page. Values load automatically and valid changes save automatically. It reads the host-composed native configuration and writes changes back to the current Profile’s `subagent` entry, without storing a separate plugin copy.
+The form uses official UI components and the configuration service. After adjusting options, click **Save** at the bottom; changes take effect immediately on subsequent tool calls. This replaces the legacy field-by-field autosave that was prone to concurrent save conflicts.
 
-Defaults are depth 1 and parallelism 8. Depth 0 disables delegation for tools inheriting this setting; an explicit tool depth still takes precedence. Parallelism counts live and starting children across the root Agent’s recursion tree, excluding the root. Changes apply to subsequent admission; lowering capacity does not stop existing children. The automatic wake-up limit is separate.
+> [!NOTE]
+> Enabling or disabling the entire plugin still requires a full restart of the DSH instance for that Profile.
 
-Saving checks revisions and preserves unrelated configuration. Higher-priority overrides, ambiguous targets, and concurrent changes reject the save. Keep your draft, reload limits, and inspect the override source before retrying. Do not enable native and managed services together to restore the interface. To avoid changing other configuration through alias references, proxy settings are read-only when the native configuration subtree or its ancestors contain YAML anchors / aliases; anchors belonging only to unrelated entries remain supported.
+## Where did the direct-child communication toggles go?
 
-## How do I temporarily disable HMR (Hot Module Reload)?
+The toggles restricting communication to running or idle direct children have been removed.
 
-This is an optional local debug step that affects only DSH hot reload:
+Messaging between agents in the collaboration tree now fully adheres to standard native behavior, eliminating redundant barriers that could block legitimate workflows. Any leftover legacy switches in saved configurations are safely ignored and will not prevent message delivery.
 
-```yaml
-- id: hmr
-  disabled: true
-```
+## What does "Official default policy" mean for model sources?
 
-Merge the above into your Profile's `cordis.patch.yml` and restart DSH.
+Subagents use DSH's official session model authorization. Model selection and session-forking inheritance remain available. This is also the plugin's default choice.
 
-## What is the difference between the three model sources?
+## Will reaching the automatic message allowance terminate the Agent?
 
-- **Conversation Start List (Native)**: Uses the candidate model snapshot captured at conversation creation.
-- **Current DSH Settings List**: Dynamically reads currently selected submodels from DSH settings on each query or creation.
-- **All Available Models in DSH**: Reads all models registered in DSH (still validated against provider adapters and access permissions).
+**No, agents are not terminated.**
 
-## How does switching between the management entry and native services work?
+When the allowance is exhausted, only that specific automated message is rejected—the agent keeps running. This limit exists to prevent autonomous multi-agent loops from running indefinitely:
+- Any human message or reply to a question immediately **resets the allowance** for the entire collaboration tree.
+- Subagents reporting task results to their direct parent (with `task_result: true`) **do not consume allowance**.
+- Official native task completion notifications are exempt from this limit.
+- Failed message sends automatically refund reserved allowance.
 
-The patch inserts one management entry. When enabled, managed services run; when disabled and restarted, native root services restore automatically. Presets are adapted in memory without editing files.
+## Why is model-side `queue` delivery no longer offered?
 
-## How do I recover if DSH fails to start after accidental uninstallation?
+The plugin reuses official `send_message` steer delivery: working targets receive messages at step boundaries, and idle targets can start a turn. It does not forcibly interrupt an in-flight model request or tool call.
 
-This applies only if legacy manual pins to uninstalled modules remain in configuration.
+The former `queue` option queued a message for a later turn; it did not force an interruption. This plugin chose to remove model-side `delivery` selection. Official user-side delivery still supports queuing, so this is not an upstream removal of `queue`. Passing the old `delivery` argument to the adapted model tool returns an error.
 
-1. Stop DSH services completely, preserving configuration and logs.
-2. Manually fix Profile configuration files (e.g. `cordis.patch.yml` or `cordis.yml`), removing references to uninstalled modules and restoring native root services. Also check `*.patch.json` external startup overlays under the Profile directory: stale plugin rows there break startup too, see the next section.
-3. Do not clear the entire patch; keep root tools from experimental packages disabled. Restart DSH after verifying.
+## Can a child Agent wake its parent?
 
-## What should I do when startup fails and an external startup overlay exists?
+Yes. An "online parent" means its Agent instance remains loaded by the host, including while idle:
 
-External startup overlays (`*.patch.json` files written by the local launcher under the Profile directory, such as `desktop-next.cordis.patch.json` and `desktop-next.runtime.patch.json`) take precedence over the Profile's `cordis.patch.yml`. After the plugin is uninstalled, disabled, or downgraded, stale module rows in those files make DSH fail to start. Handle them in order:
+- **Idle or between turns**: An automatic completion notice can wake the parent and start a turn. A working parent receives it at a step boundary.
+- **Released instance**: Automatic completion notices do not cold-restore a parent just to report results. In nested delegation, an intermediate child may finish and be released while its descendants continue working.
+- **Explicit `send_message`**: While the collaboration root (Lead) remains loaded, official messaging can cold-restore a released parent conversation if it is a continuable member of the same tree. This differs from automatic completion reporting.
 
-1. **Stop DSH completely** (closing the browser page is not enough); keep configuration, sessions, and usage records.
-2. **Back up** the suspect `*.patch.json` overlays and the Profile's `cordis.patch.yml` (or `cordis.yml`): copy them, or rename the suspects to `*.bak` for rollback.
-3. **Remove the plugin rows from the overlays**: in each `*.patch.json`, delete every row referencing `@sieuno/dsh-native-collab` or its subpaths (`/subagent`, `/agent-team`, `/tool-*`) and `dsh-native-collab-ui`. If unsure which file is guilty, rename suspects one by one and retry startup.
-4. **Check the Profile patch** for the same stale rows; root `subagent`, `agent-team`, and `tool-agent-team` should be available again while the four root-level tools stay disabled. Do not clear the whole patch.
-5. **Restart the same Profile** and confirm sessions open. If startup still fails and the plugin is installed, set `disabled: true` on the management entry row `dsh-native-collab-ui` and restart to return to native services, then follow the previous section.
-6. **Report**: provide DSH, Node, and plugin versions, the error code, and sanitized relevant config rows; never upload a whole Profile or files containing credentials.
+Ending a turn to wait for results is normal; the parent does not need to keep generating or polling to remain wakeable.
 
-## What is the consecutive automatic wake-up limit? How to resume when reached?
+## What should I do if DSH fails to start after upgrading or uninstalling?
 
-The default limit is 32 consecutive automatic wake rounds shared by all Agents associated with the session to prevent infinite loops.
-- **Counts only uninterrupted automatic interaction**: Only counts automatic messages without user intervention.
-- **Reset mechanism**: Any user input in a related session resets the counter immediately; process restart also resets it.
-- **Behavior at limit**: Throws `Automatic wake limit reached; message send failed.` to the sending agent without cancelling any agents. Reports to direct parent or Lead are exempt.
-- **Resuming**: Send a message in any related session to reset the counter and resume.
-
-## How to submit feedback?
-
-Provide versions, sanitized Profile info, reproduction steps, and error logs. Obfuscate tokens, API keys, private paths, and conversation contents.
+If DSH crashes on startup after an upgrade or removal, stale startup patches from the old version may still be present. Follow these steps to resolve:
+1. **Fully stop DSH** and back up your Profile configuration folder.
+2. Open `cordis.patch.yml` (and any launcher-generated `*.patch.json` files) in that Profile directory.
+3. Search for references to `@sieuno/dsh-native-collab` or retired subpaths (e.g. `/subagent`, `/agent-team`).
+4. **Remove only the stale entries related to this plugin**, leaving other plugins and base configurations intact (do not delete or empty the entire file).
+5. Save and restart DSH, then check whether official collaboration services recover. If startup still fails, keep the specific error and investigate other configuration or dependency issues.

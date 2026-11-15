@@ -1,41 +1,47 @@
-# Installation and Usage Guide
+# Installation and Upgrade Guide
 
-Starting with **0.3.1**, **one package** supports the DSH 0.2.1 (from rc.1) and 0.2.2 series, including prereleases; the package declares `>=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-0 <0.2.3-0`. Versions 0.3.0 and earlier support only the 0.2.1 series. The plugin requires Node `>=22.19.0`; when using DSH 0.2.2, you must also meet the host requirement of Node `>=24.9.0`. The plugin floor does not lower the host requirement. Locked CI versions provide reproducible regression checks, not a ceiling on series support; see [Testing](../TESTING.md) for the distinction between test coverage and real-Host acceptance.
+### Requirements
+- **DeepSeek Harness**: `0.2.2-rc.2` or `0.2.2-rc.3`
+- **Node.js**: `≥ 24.9.0`
+- **Older Host Versions**: If you are using a DSH version earlier than `0.2.2-rc.2`, please continue using plugin version `0.3.5`.
 
-## 1. Installation & Activation
+---
 
-**Prerequisite**: enable the official experimental Agent Teams bundle (`@deepseek-ai/dsh-experimental-agent-team-profile`) in the same Profile to provide the native service entries required for managed takeover. A default Web Profile may not include it. The plugin refuses missing or duplicate native providers; do not exempt unknown host versions to force activation.
+### Installation Steps
 
-1. Install into the Profile you actually use; there is no need to stop the running instance first (installation only writes dependencies into that Profile). Replace `<profile>` with your Profile name (the GUI default is usually `web`):
+#### 1. Install the Plugin
+- **From npm registry (once officially released)**:
+  ```sh
+  dsh plugin --profile <profile-name> add @sieuno/dsh-native-collab
+  ```
+- **From a local test package (.tgz)**:
+  ```sh
+  dsh plugin --profile <profile-name> add /path/to/sieuno-dsh-native-collab-0.4.0.tgz
+  ```
 
-```sh
-dsh plugin --profile <profile> add @sieuno/dsh-native-collab
-```
+#### 2. Restart DSH
+After installing, enabling, or disabling the plugin, **fully close and restart the DSH instance for that Profile**. Refreshing the browser page does not reload background plugin services.
 
-When using a local or offline package, replace the package name with the path to the TGZ file.
+To disable the plugin, use the package's main switch rather than switching off only its "Native collaboration extensions" component. DSH withdraws the package's patch layer and added dependencies when the whole package is disabled; disabling an individual component leaves that layer in place. The plugin no longer includes a `fallback` component.
 
-2. Close and restart that Profile, then open the plugin management page. When upgrading over a currently running older version, close that instance first to avoid Windows file locks.
+#### 3. Configuration & Usage
+After restarting, open this plugin's detail page under Plugins → Installed. The form contains "Subagent model source" and "Automatic wake message limit". Model source defaults to "Official default policy". Click Save to apply changes to subsequent tool calls immediately.
+> [!NOTE]
+> Subagent maximum depth, concurrency limits, Team mode, and task boards are managed directly via official native controls.
 
-## 2. Configuration & Automatic Saving
+---
 
-- **Subagent Settings**: When the native settings page is unavailable, this plugin edits its settings on its behalf. Depth and parallelism load automatically; valid changes save back to the original `subagent` entry in this Profile, without a separate copy. Existing depth rules are unchanged; subsequent admission and native services use the same configuration.
-- **Automatic Saving**: Subagent settings and enhancement preferences save automatically; errors appear beside the affected section. No manual reload or save button is needed.
-- **No Manual Editing**: Standard configuration changes need no file editing and no service switching.
-- **Activation Lifecycle**:
-  - **Model Source**: Applies immediately to subsequent queries and agent creation.
-  - **Startup Settings**: Enhancement toggles and consecutive automatic wake-up limit take effect after a normal Profile restart (browser refresh alone is not a restart).
+## Upgrading from Older Versions (0.3.5 and earlier)
 
-## 3. Core Architecture
+Older versions of this plugin replaced official collaboration services entirely, whereas the new version is rebuilt as a **lightweight native extension on top of official services**. To ensure a smooth transition, follow these recommendations:
 
-- **Single Management Entry**: The patch inserts only one management entry managing three backend services. Disabling this entry restores native services on restart.
-- **Preset Adaptation**: Dynamically adapts tools in memory for known AgentPresets without modifying preset files; unknown custom providers remain untouched. Root tools from experimental packages remain disabled.
-- **Consecutive Automatic Wake-up Limit**:
-  - Default: 32 rounds shared by all Agents associated with the session to prevent infinite loops.
-  - Only counts uninterrupted cross-session automatic wake-ups and messages without user input.
-  - Any human input in a related session resets the count immediately; in-memory count resets on restart.
-  - Task completion/stop reports to direct parent or Team Lead are exempt.
-- **Task Progress**: View progress in originating conversation's Team panel or task card.
-
-## 4. Uninstallation
-
-Before uninstalling, disable the plugin, restart the same Profile, and confirm that native services have been restored; then remove the plugin. Normal uninstallation removes the plugin patch. Normal use needs no manual config editing. If DSH fails to start after uninstalling, disabling, or changing versions (usually because a `*.patch.json` external startup overlay under the Profile directory still references this plugin), follow the startup recovery steps in the [FAQ](FAQ.md); never clear the whole patch or delete session data.
+1. **Backup**: Back up your Profile configuration and important session data before upgrading.
+2. **Try in a Fresh Profile First**: We recommend testing new sessions in a separate or fresh Profile.
+3. **Upgrade Steps for Existing Profiles**:
+   - First, **disable the old plugin** in your Profile, then **fully restart DSH**;
+   - Confirm that official native subagents and collaboration features work properly;
+   - Install the new version (or local .tgz package) and restart DSH once more.
+4. **Historical Session Data**:
+   - Historical custom team records created by the old version's identity-conversion mechanism cannot be automatically migrated to the native subagent tree. We recommend starting new sessions for multi-agent workflows.
+   - Retired custom exports (such as `/subagent`, `/agent-team`, and `/tool-*`) are no longer provided.
+   - If DSH fails to start after upgrading or uninstalling, refer to the [FAQ](FAQ.en.md) to clean up leftover plugin startup overrides.

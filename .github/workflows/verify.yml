@@ -17,25 +17,4 @@ concurrency:
 
 jobs:
   required:
-    if: github.event_name != 'schedule'
     uses: ./.github/workflows/checks.yml
-
-  # New upstream majors/minors must not silently replace the supported SDK.
-  sdk-probe:
-    name: Latest Cordis/Schemastery declaration probe (advisory on pushes)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    continue-on-error: ${{ github.event_name != 'schedule' }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22.19.0'
-          cache: npm
-      - run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
-      - uses: ./.github/actions/sdk-typings
-        with:
-          latest: 'true'
-      - run: node scripts/emit-dist.mjs --check
-        env:
-          DSH_HOST_CONTRACT: require

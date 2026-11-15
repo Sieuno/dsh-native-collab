@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { LlmAdapter, createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -41,6 +41,7 @@ class Query extends SessionQuery {
   searchEvents() { throw new Error('Search is outside this test') }
 }
 async function host(t, { preset = false } = {}) {
+  await mkdir(resolve('.test-artifacts'), { recursive: true })
   const root = await mkdtemp(resolve('.test-artifacts/native-host-'))
   const ctx = new Context()
   t.after(async () => {

@@ -53,6 +53,7 @@
     "build": "node scripts/native-build.mjs",
     "validate:package": "node scripts/native-package.mjs",
     "check:types": "node scripts/native-typecheck.mjs",
+    "check:authors": "node scripts/check-commit-attribution.mjs",
     "check:load": "node --import ./scripts/native-sdk-hook.mjs --test tests/native-startup.test.mjs",
     "test": "node --test tests/auto-wake.test.mjs tests/package.test.mjs tests/publication.test.mjs",
     "test:sdk": "node --import ./scripts/native-sdk-hook.mjs --test tests/native-tools.test.mjs tests/native-startup.test.mjs tests/native-host.test.mjs tests/settings-client.test.mjs",

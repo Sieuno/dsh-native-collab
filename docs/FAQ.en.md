@@ -2,18 +2,26 @@
 
 ## Why are the custom Team panel and "identity conversion" gone?
 
-In DSH `0.2.2-rc.2 / rc.3`, the official architecture fully unified Teams with Subagents. All team members are now managed natively within the Subagent tree, complete with built-in member discovery, task boards, and session Team mode.
+DSH `0.2.2-rc.2` unified Teams with Subagents. All team members are now managed natively within the Subagent tree, complete with built-in member discovery, task boards, and session Team mode.
 
 Instead of replacing or duplicating these official services, this plugin embraces the official native infrastructure. The old identity-conversion mechanism is replaced by the official member model. The plugin provides model-source selection, an automatic message allowance to prevent loops, and improved delegation prompts.
 
 ## How are settings saved? Why is there no custom autosave UI?
 
-Go to **Plugins → Installed** and open this plugin's detail page to access the settings form (featuring "Subagent model source" and "Automatic wake message limit").
+Go to **Plugins → Installed** and open this plugin's detail page to access the settings form (featuring "Subagent model source", "Automatic wake message limit", and "Disable the agent wait tool").
 
 The form uses official UI components and the configuration service. After adjusting options, click **Save** at the bottom; changes take effect immediately on subsequent tool calls. This replaces the legacy field-by-field autosave that was prone to concurrent save conflicts.
 
 > [!NOTE]
 > Enabling or disabling the entire plugin still requires a full restart of the DSH instance for that Profile.
+
+## Why is there an option to "Disable the agent wait tool"?
+
+DSH's native `wait_agent` tool is often used by agents to poll or block on subagent tasks, consuming dialogue turns and wasting context tokens.
+
+In practice, DSH already provides built-in automatic task completion notifications: the parent agent concludes its current turn after dispatching subagent tasks, and official notifications wake it automatically when subagents finish.
+
+Enabling "Disable the agent wait tool" hides `wait_agent` from the agent and guides it via system prompts to end its turn naturally after delegating tasks. This prevents busy-waiting and reduces token usage (disabled by default; enable as needed).
 
 ## Where did the direct-child communication toggles go?
 

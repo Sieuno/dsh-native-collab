@@ -1,7 +1,7 @@
 {
   "name": "@sieuno/dsh-native-collab",
-  "version": "0.4.0",
-  "description": "DeepSeek Harness collaboration extensions: subagent model sources, a shared automatic message allowance, and improved delegation prompts.",
+  "version": "0.4.1",
+  "description": "DeepSeek Harness collaboration extensions: subagent model sources, a shared automatic message allowance, wait-tool control, and improved delegation prompts.",
   "icon": "./icons/subagent.svg",
   "type": "module",
   "license": "MIT",

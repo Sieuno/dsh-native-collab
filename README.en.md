@@ -29,6 +29,7 @@ Now that official DSH has unified the Team and Subagent collaboration tree, this
 |---|---|
 | **Dynamic Model Sources** | Provides three model source modes for newly delegated child agents: `conversation` (default, retains session authorization), `settings` (re-reads current native child model settings per call), and `all` (re-reads registered providers per call, subject to official adapter validation). Applies only to fresh child delegation; fork retains official parameters and inheritance rules. |
 | **Shared Automatic Message Allowance** | 32 messages by default, shared across all agents in the entire collaboration tree to prevent infinite loops. Counts only successfully delivered ordinary model messages (refunds on send failures; native completion notices do not count), and resets upon user input, question replies, or process restarts. Reports submitted via `task_result: true` to the direct parent are exempt. |
+| **Wait-Tool Control** | Optionally disable `wait_agent`. Prevents agents from blocking turns with busy-wait polling, prompting them to conclude their turn naturally so official completion notifications wake them automatically. |
 | **Concise Delegation Guidance** | Retains official system prompts while injecting lightweight delegation principles: directly handle small tasks, minimize redundant context, and coordinate when blocked; fully leverages official automatic result delivery. |
 | **Native Host Settings & Panels** | Recursion depth and concurrency limits are managed natively through official subagent settings without maintaining duplicate stores; the plugin detail page provides a streamlined settings form; progress is viewed directly in official session Team panels or task cards. |
 
@@ -40,7 +41,7 @@ The plugin provides three dynamic source modes for fresh child agent creation (`
 - `settings`: Re-reads current official child model settings on each query or explicit selection, rather than substituting obsolete session lists. Rejects explicit selection when native child model selection is disabled; unselected calls follow official inheritance.
 - `all`: Inspects all currently registered model providers on each call. Models published by adapters are listed; unlisted exact model IDs still require validation by official adapters before creation.
 
-Dynamic sources do not alter authorization records stored in session history, nor do they bypass official checks for model existence, reasoning tier, or provider capabilities. `subagent_fork` strictly preserves official inheritance and configuration without injecting extra selection parameters. The settings page contains only model source and automatic wake message limit. Model source defaults to Official default policy without removing native selection capabilities.
+Dynamic sources do not alter authorization records stored in session history, nor do they bypass official checks for model existence, reasoning tier, or provider capabilities. `subagent_fork` strictly preserves official inheritance and configuration without injecting extra selection parameters. The settings page provides three settings: model source, automatic wake message limit, and disabling the agent wait tool. Model source defaults to Official default policy without removing native selection capabilities.
 
 ### 2. Message Delivery
 
@@ -55,6 +56,15 @@ To prevent multi-agent loops during autonomous collaboration, the plugin enforce
 - **Exhaustion Behavior**: Reaching the limit rejects only that specific outgoing message with a clear explanatory error; it does not stop, cancel, or terminate any agent, nor does it constrain subsequent user input or the agent's internal reasoning. When exhausted, agents should await human intervention rather than looping retries.
 - **Result Report Exemption**: Official task completion notices do not pass through this counter and consume no allowance. In addition, child agents can submit final completed-task reports to their **direct parent** using `task_result: true`, which is exempt (ordinary messages, peer messages, or downward messages cannot abuse this flag).
 - **Scope Boundary**: Guards apply solely to official model tools adapted by this plugin; third-party plugins directly calling low-level service APIs are not restricted.
+
+### 4. Disable Agent Wait Tool
+
+During multi-agent collaboration, agents often call `wait_agent` repeatedly to poll or block on subagent tasks, consuming valuable dialogue turns and wasting context tokens.
+
+When "Disable the agent wait tool" is turned on:
+- The plugin hides `wait_agent` from the agent (explicit calls are intercepted and return a clear notification);
+- The system prompt guides the parent agent to conclude its turn naturally after delegating tasks, letting DSH's native completion notifications wake it automatically upon subagent completion;
+- Any wait calls already in flight finish normally. This option is disabled by default and can be enabled in settings.
 
 ## Usage Recommendations
 
@@ -73,12 +83,16 @@ Install into the Profile you currently use:
 dsh plugin --profile <profile> add @sieuno/dsh-native-collab
 ```
 
-> **Note**: Before version 0.4.0 is published to npm, running the package-name command fetches the older 0.3.5 release. To test prior to release, install the built `.tgz` archive (`dsh plugin --profile <profile> add /path/to/sieuno-dsh-native-collab-0.4.0.tgz`). After official publication, the package-name command installs 0.4.0 directly.
+To test a local build, you can also install the `.tgz` package directly:
+
+```sh
+dsh plugin --profile <profile> add /path/to/sieuno-dsh-native-collab-0.4.1.tgz
+```
 
 ### Activation & Workflow
 
 1. **Restart Profile**: Restart the same Profile normally after installing, enabling, or disabling the plugin (refreshing the web browser is not a service restart).
-2. **Plugin Settings Form**: Open this plugin's detail page under Plugins → Installed to configure "Subagent model source" and "Automatic wake message limit". Click Save to apply changes to subsequent tool calls immediately.
+2. **Plugin Settings Form**: Open this plugin's detail page under Plugins → Installed to configure "Subagent model source", "Automatic wake message limit", and "Disable the agent wait tool". Click Save to apply changes to subsequent tool calls immediately.
 3. **Native Runtime Limits**: Maximum recursion depth, concurrency limits, Team mode toggles, and task boards are configured directly through official host settings.
 4. **Disabling the plugin**: Use the package's main switch and restart the same Profile rather than disabling only its internal component.
 
@@ -92,8 +106,8 @@ dsh plugin --profile <profile> add @sieuno/dsh-native-collab
 The local development environment (Windows / Node 24) has verified:
 
 - 10 base contract, package manifest, and release configuration checks;
-- 24 SDK and runtime integration tests per locked DSH 0.2.2-rc.2 and 0.2.2-rc.3 SDK, covering tools, Loader assembly, settings forms, and real AgentLoop / Subagent / presets / Team / JSONL persistence;
-- Strict type checking across both SDK target declarations;
+- 25 SDK and runtime integration tests per locked DSH SDK from 0.2.2-rc.2 through rc.5, covering tools, Loader assembly, settings forms, and real AgentLoop / Subagent / presets / Team / JSONL persistence;
+- Strict type checking across all four SDK target declarations;
 - Build consistency verification (`node scripts/native-build.mjs --check`) and `npm pack --dry-run` packaging checks.
 
 *Note: Verification does not claim end-to-end acceptance against live commercial model APIs, desktop/browser DOM interactions, full installed Profile lifecycles, or legacy session migration. See [TESTING.md](TESTING.md) for tiered evidence boundaries.*

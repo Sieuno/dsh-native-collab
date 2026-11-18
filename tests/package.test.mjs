@@ -20,10 +20,10 @@ test('startup patch preserves official service names, runtime settings, and pres
   const pkg = JSON.parse(await readFile('package.json', 'utf8'))
   assert.equal(pkg.exports['./fallback'], undefined)
 })
-test('CI covers both supported SDKs and release waits for the required gates', async () => {
+test('CI covers every supported SDK and release waits for the required gates', async () => {
   const checks = parse(await readFile('.github/workflows/checks.yml','utf8'))
   const release = parse(await readFile('.github/workflows/release.yml','utf8'))
-  assert.deepEqual(checks.jobs.native.strategy.matrix.sdk, ['native','native-rc2'])
+  assert.deepEqual(checks.jobs.native.strategy.matrix.sdk, ['native','native-rc2','native-rc4','native-rc5'])
   assert.ok(checks.jobs.native.steps.some(step => step.run === 'npm run test:sdk'))
   assert.ok(checks.jobs.native.steps.some(step => step.run === 'npm run check:types'))
   assert.equal(checks.jobs.attribution.steps.find(step => step.uses?.startsWith('actions/checkout@')).with['fetch-depth'], 0)

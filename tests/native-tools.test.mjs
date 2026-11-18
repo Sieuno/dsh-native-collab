@@ -147,9 +147,11 @@ test('native authorization failures remain failures and do not consume allowance
 })
 
 test('extension disposal restores official tool bodies, schema, and prompts', async t => {
-  const f = await using(t, { modelSource: 'all', teamRequestLimit: 1 })
+  const f = await using(t, { modelSource: 'all', teamRequestLimit: 1, disableWaitAgent: true })
+  assert.equal(f.ctx.tools.executable('wait_agent', f.parent), undefined)
   await f.entry.fiber.dispose()
   assert.equal(f.ctx.get('subagents'), f.runtime)
+  assert.ok(f.ctx.tools.executable('wait_agent', f.parent))
   assert.equal(f.ctx.tools.get('send_message').parameters.properties.task_result, undefined)
   assert.equal((await f.call('subagent', task('a'))).isError, true)
   for (let index = 0; index < 3; index++) assert.equal((await f.call('send_message', { agent: 'child', message: 'native' })).isError, false)

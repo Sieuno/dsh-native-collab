@@ -1,7 +1,7 @@
 # Installation and Upgrade Guide
 
 ### Requirements
-- **DeepSeek Harness**: `0.2.2-rc.2` or `0.2.2-rc.3`
+- **DeepSeek Harness**: `0.2.2-rc.2`, `0.2.2-rc.3`, `0.2.2-rc.4`, or `0.2.2-rc.5`
 - **Node.js**: `≥ 24.9.0`
 - **Older Host Versions**: If you are using a DSH version earlier than `0.2.2-rc.2`, please continue using plugin version `0.3.5`.
 
@@ -10,22 +10,22 @@
 ### Installation Steps
 
 #### 1. Install the Plugin
-- **From npm registry (once officially released)**:
+- **Online Installation (Recommended)**:
   ```sh
   dsh plugin --profile <profile-name> add @sieuno/dsh-native-collab
   ```
 - **From a local test package (.tgz)**:
   ```sh
-  dsh plugin --profile <profile-name> add /path/to/sieuno-dsh-native-collab-0.4.0.tgz
+  dsh plugin --profile <profile-name> add /path/to/sieuno-dsh-native-collab-0.4.1.tgz
   ```
 
 #### 2. Restart DSH
 After installing, enabling, or disabling the plugin, **fully close and restart the DSH instance for that Profile**. Refreshing the browser page does not reload background plugin services.
 
-To disable the plugin, use the package's main switch rather than switching off only its "Native collaboration extensions" component. DSH withdraws the package's patch layer and added dependencies when the whole package is disabled; disabling an individual component leaves that layer in place. The plugin no longer includes a `fallback` component.
+To disable the plugin, turn off the package's master switch and restart the Profile, rather than disabling individual internal components.
 
 #### 3. Configuration & Usage
-After restarting, open this plugin's detail page under Plugins → Installed. The form contains "Subagent model source" and "Automatic wake message limit". Model source defaults to "Official default policy". Click Save to apply changes to subsequent tool calls immediately.
+After restarting, open this plugin's detail page under Plugins → Installed. The form contains "Subagent model source", "Automatic wake message limit", and "Disable the agent wait tool". Model source defaults to "Official default policy". Click Save to apply changes to subsequent tool calls immediately.
 > [!NOTE]
 > Subagent maximum depth, concurrency limits, Team mode, and task boards are managed directly via official native controls.
 

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Native collaboration extensions",
-    "description": "Subagent model-source selection, a shared automatic message allowance, and improved delegation prompts.",
+    "description": "Subagent model-source selection, a shared automatic message allowance, wait-tool control, and improved delegation prompts.",
     "detail": "locale/settings.en.md"
   }
 }

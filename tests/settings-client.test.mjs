@@ -96,7 +96,7 @@ async function bench(t, { writable = true, reject = false, config = {} } = {}) {
 
 const settled = () => new Promise(resolve => setImmediate(resolve))
 
-test('bundle settings render only model source and message limit with official policy selected by default', async t => {
+test('bundle settings default to the official model policy and keep the wait tool enabled', async t => {
   const b = await bench(t)
   assert.equal(b.registered().options.key, '@sieuno/dsh-native-collab')
   assert.deepEqual(Object.keys(b.dictionaries.zh).sort(), Object.keys(b.dictionaries.en).sort())
@@ -104,7 +104,8 @@ test('bundle settings render only model source and message limit with official p
     const html = b.markup(language)
     assert.match(html, /<select[^>]*id="native-collab-modelSource"/)
     assert.match(html, /id="native-collab-teamRequestLimit"/)
-    assert.equal((html.match(/role="switch"/g) ?? []).length, 0)
+    assert.equal((html.match(/role="switch"/g) ?? []).length, 1)
+    assert.match(html, /role="switch" aria-checked="false"/)
     assert.equal((html.match(/<option /g) ?? []).length, 3)
     assert.match(html, /value="conversation" selected=""/)
     assert.doesNotMatch(html, /Automatic \(default|自动（|native-collab-modelEnhancement|native-collab-delegationGuidance|native-collab-communicationEnhancement/)
@@ -137,6 +138,32 @@ test('model and limit controls stage edits, save through the native Loader, and 
   b.face.resetField('teamRequestLimit')
   b.face.save(); await settled()
   assert.equal(b.state().teamRequestLimit.text, '32')
+})
+
+test('saving the wait switch revokes prior tool admission and reset restores the default', async t => {
+  const b = await bench(t)
+  const { ctx, parent, entry } = b.native
+  const uid = entry.fiber.uid
+  const resolveTools = () => ctx.tools.resolve({ agent: parent, modelSelection: parent.options, signal: new AbortController().signal })
+  const before = await resolveTools()
+  t.after(() => before.dispose())
+  assert.ok(ctx.tools.executable('wait_agent', parent, before))
+  b.controls()[2].props.children[0].props.children[1].props.onChange(true)
+  assert.ok(ctx.tools.executable('wait_agent', parent, before))
+  b.face.save(); await settled()
+  assert.equal(entry.fiber.uid, uid)
+  assert.equal(entry.options.config.disableWaitAgent, true)
+  assert.match(b.markup('en'), /role="switch" aria-checked="true"/)
+  assert.ok(ctx.tools.get('wait_agent', parent))
+  assert.equal(ctx.tools.executable('wait_agent', parent), undefined)
+  assert.equal(ctx.tools.executable('wait_agent', parent, before), undefined)
+  const disabled = await resolveTools()
+  t.after(() => disabled.dispose())
+  assert.ok(!ctx.tools.schemas(parent, disabled).some(tool => tool.name === 'wait_agent'))
+  assert.ok(ctx.tools.executable('send_message', parent, disabled))
+  b.face.resetField('disableWaitAgent'); b.face.save(); await settled()
+  assert.match(b.markup('en'), /role="switch" aria-checked="false"/)
+  assert.ok(ctx.tools.executable('wait_agent', parent))
 })
 
 test('invalid limits, read-only forms, and rejected saves keep the accepted settings intact', async t => {

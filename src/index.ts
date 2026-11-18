@@ -1,6 +1,7 @@
 import { Service, type Context, type Fiber } from '@deepseek-ai/cordis'
 import * as delegation from '@deepseek-ai/dsh-tool-subagent'
 import * as control from '@deepseek-ai/dsh-tool-subagent-control'
+import type {} from '@deepseek-ai/cordis-plugin-loader'
 import { Config, preferences } from './config.ts'
 import type { Config as PreferencesConfig } from './config.ts'
 import { MessagePolicy } from './messages.ts'
@@ -25,6 +26,11 @@ export default class NativeCollab extends Service {
     const messages = new MessagePolicy(ctx, current)
     const adapted = new WeakSet<Fiber>()
     const contexts = new Set<() => void>()
+    const waitToolUpdates = new Set<() => void>()
+    ctx.on('loader/volatile-update', paths => {
+      if (!paths.some(path => path[0] === 'disableWaitAgent')) return
+      for (const update of waitToolUpdates) update()
+    })
     ctx.effect(() => () => {
       for (const dispose of contexts) dispose()
       contexts.clear()
@@ -41,7 +47,7 @@ export default class NativeCollab extends Service {
       if (!adapted.has(fiber)) {
         let dispose: (() => void) | undefined
         dispose = nativeToolContext(fiber.ctx, callback === delegation.apply ? 'delegation' : 'control', current, messages,
-          callback === control.apply || value.provider === 'spawn', () => {
+          callback === control.apply || value.provider === 'spawn', waitToolUpdates, () => {
             adapted.delete(fiber)
             if (dispose) contexts.delete(dispose)
           })

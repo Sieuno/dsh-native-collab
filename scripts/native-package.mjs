@@ -8,7 +8,7 @@ export async function validatePackage() {
   if (JSON.stringify(Object.keys(pkg.peerDependencies).sort()) !== JSON.stringify(peers.sort())) throw new Error('Required host peer inventory differs')
   const files = ['dist/native/*.js','dist/client.js','locale/*.json','locale/settings.*.md','icons/subagent.svg','cordis.patch.yml','README.md','README.en.md','LICENSE','UPSTREAM.md','THIRD_PARTY_NOTICES.md','CHANGELOG.md','CONTRIBUTING.md','TESTING.md','docs/INSTALL*.md','docs/FAQ*.md']
   if (JSON.stringify([...pkg.files].sort()) !== JSON.stringify(files.sort())) throw new Error('Publish whitelist differs')
-  if (pkg.engines.dsh !== '=0.2.2-rc.2 || =0.2.2-rc.3' || pkg.engines.node !== '>=24.9.0') throw new Error('Unsupported host declarations')
+  if (pkg.engines.dsh !== '=0.2.2-rc.2 || =0.2.2-rc.3 || =0.2.2-rc.4 || =0.2.2-rc.5' || pkg.engines.node !== '>=24.9.0') throw new Error('Unsupported host declarations')
   if (pkg.dependencies && Object.keys(pkg.dependencies).length) throw new Error('The extension must not ship host dependencies')
   if (pkg.bundledDependencies || pkg.bundleDependencies) throw new Error('Bundled dependencies are forbidden')
   for (const [name, version] of Object.entries(pkg.peerDependencies)) {

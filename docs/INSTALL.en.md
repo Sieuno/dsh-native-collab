@@ -1,7 +1,7 @@
 # Installation and Upgrade Guide
 
 ### Requirements
-- **DeepSeek Harness**: `0.2.2-rc.2` or `0.2.2-rc.3`
+- **DeepSeek Harness**: `0.2.2-rc.2`, `0.2.2-rc.3`, `0.2.2-rc.4`, or `0.2.2-rc.5`
 - **Node.js**: `≥ 24.9.0`
 - **Older Host Versions**: If you are using a DSH version earlier than `0.2.2-rc.2`, please continue using plugin version `0.3.5`.
 

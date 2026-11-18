@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sdk: [native, native-rc2]
+        sdk: [native, native-rc2, native-rc4, native-rc5]
         os: [ubuntu-latest, windows-latest]
     env:
       DSH_NATIVE_SDK: .github/sdk/${{ matrix.sdk }}

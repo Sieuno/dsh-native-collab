@@ -10,7 +10,7 @@ This project is an **unofficial community plugin** (neither an official distribu
 
 ## Compatibility
 
-This plugin supports **DeepSeek Harness 0.2.2-rc.2 and 0.2.2-rc.3**, requiring **Node.js ≥24.9.0**.
+This plugin supports **DeepSeek Harness 0.2.2-rc.2, rc.3, rc.4, and rc.5**, requiring **Node.js ≥24.9.0**.
 
 - **Legacy Host Compatibility**: This architecture drops support for DSH 0.2.1 and older 0.2.2-alpha / rc.1 releases. For older hosts, please continue using the published plugin release **0.3.5**.
 - **Future Version Notice**: Does not claim blanket compatibility with unreviewed future prereleases or arbitrary 0.2.2 variants; future host releases require separate review.

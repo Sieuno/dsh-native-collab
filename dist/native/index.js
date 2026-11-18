@@ -18,6 +18,13 @@ export default class NativeCollab extends Service {
         const messages = new MessagePolicy(ctx, current);
         const adapted = new WeakSet();
         const contexts = new Set();
+        const waitToolUpdates = new Set();
+        ctx.on('loader/volatile-update', paths => {
+            if (!paths.some(path => path[0] === 'disableWaitAgent'))
+                return;
+            for (const update of waitToolUpdates)
+                update();
+        });
         ctx.effect(() => () => {
             for (const dispose of contexts)
                 dispose();
@@ -36,7 +43,7 @@ export default class NativeCollab extends Service {
                 return raw;
             if (!adapted.has(fiber)) {
                 let dispose;
-                dispose = nativeToolContext(fiber.ctx, callback === delegation.apply ? 'delegation' : 'control', current, messages, callback === control.apply || value.provider === 'spawn', () => {
+                dispose = nativeToolContext(fiber.ctx, callback === delegation.apply ? 'delegation' : 'control', current, messages, callback === control.apply || value.provider === 'spawn', waitToolUpdates, () => {
                     adapted.delete(fiber);
                     if (dispose)
                         contexts.delete(dispose);

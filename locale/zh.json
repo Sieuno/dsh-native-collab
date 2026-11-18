@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "原生协作扩展",
-    "description": "提供子 Agent 模型来源选择和共享自动消息额度，并优化委派提示词。",
+    "description": "提供子 Agent 模型来源选择、共享自动消息额度与等待工具控制，并优化委派提示词。",
     "detail": "locale/settings.zh.md"
   }
 }

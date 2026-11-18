@@ -4,6 +4,7 @@ export const Config = z.object({
     modelEnhancement: z.boolean().default(true).volatile(),
     modelSource: z.union(['conversation', 'settings', 'all']).volatile(),
     teamRequestLimit: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(32).volatile(),
+    disableWaitAgent: z.boolean().default(false).volatile(),
     communicationEnhancement: z.boolean(),
     runningChildGuidance: z.boolean(),
     completedChildContinuation: z.boolean(),
@@ -19,5 +20,6 @@ export function preferences(config) {
         modelSource: config.modelEnhancement.get() === false ? 'conversation'
             : config.modelSource?.get() ?? (config.nativeModelSelectionCompatibility?.get() === false ? 'settings' : 'conversation'),
         teamRequestLimit: limit,
+        disableWaitAgent: config.disableWaitAgent.get(),
     };
 }

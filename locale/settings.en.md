@@ -1,6 +1,6 @@
 # Native Collaboration Extensions
 
-This plugin provides subagent model-source selection, a shared automatic message allowance, and improved delegation prompts.
+This plugin provides subagent model-source selection, a shared automatic message allowance, optional wait-tool control, and improved delegation prompts.
 
 ### Configuration & Applying Changes
 Adjust the options below and click Save. Changes apply to subsequent calls.
@@ -19,6 +19,10 @@ Applies only to new subagents. Forked sessions retain their existing model inher
 - Only successfully accepted standard model messages count against this limit (failed sends are automatically refunded, and official task completion notices are exempt).
 - The limit resets immediately whenever a user inputs a message or answers a question; restarting the instance also resets the counter.
 - When the limit is reached, only that specific message send is rejected without stopping or canceling the agent. Completed-task reports to the direct parent do not consume the allowance.
+
+### Disable Agent Wait Tool (wait_agent)
+
+Off by default. When enabled, agents cannot call `wait_agent` to block the current turn while waiting for subagents. Instead, the parent agent concludes its turn naturally after delegating tasks, and the official completion notice automatically wakes it when subagents finish (any waits already in progress finish normally). This prevents unnecessary polling and saves token context.
 
 ### Other Settings
 Subagent recursion depth and concurrency limits should be configured directly in official Subagent settings. Session-level Team mode and the task board are accessed directly via the official conversation interface.

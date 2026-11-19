@@ -3,7 +3,7 @@ window.__ModuleLoader__.load({
   id: '@sieuno/dsh-native-collab',
   factory(require) {
     const { createElement: h } = require('react')
-    const { SettingsFormModel, SettingsForm, SettingsValueField, Switch } = require('@deepseek-ai/dsh-client-ui-primitives')
+    const { SettingsFormModel, SettingsValueField, Switch } = require('@deepseek-ai/dsh-client-ui-primitives')
     const namespace = 'dsh-native-collab-ui'
     const locale = 'nativeCollab.settings'
     const fields = ['modelSource', 'teamRequestLimit', 'disableWaitAgent']
@@ -17,7 +17,7 @@ window.__ModuleLoader__.load({
         disableWaitAgent: '禁用 Agent 等待工具', disableWaitAgentHint: '开启后，禁止 Agent 使用 wait_agent 阻塞轮询，派发任务后将正常结束当前轮次，静待官方完成通知自动唤醒。',
         reset: '恢复默认', overridden: '已覆盖', invalidNumber: '请输入大于或等于 1 的安全整数。',
         unavailable: '插件未运行，暂时无法配置。', readOnly: '当前设置为只读。',
-        save: '保存', saving: '保存中…', saveFailed: '保存未成功，已保留修改。请检查设置是否已被其他页面更新。',
+        saving: '正在保存…', saveFailed: '未能自动保存，已显示当前设置。请重新修改。',
       },
       en: {
         description: 'Configure subagent model sources, shared automatic message allowance, and wait-tool behavior.',
@@ -27,19 +27,19 @@ window.__ModuleLoader__.load({
         disableWaitAgent: 'Disable the agent wait tool', disableWaitAgentHint: 'Prevents agents from using wait_agent to block the turn; encourages ending the turn so official completion notices wake them automatically.',
         reset: 'Reset to default', overridden: 'Overridden', invalidNumber: 'Enter a safe integer of at least 1.',
         unavailable: 'The plugin is not running and cannot be configured.', readOnly: 'These settings are read-only.',
-        save: 'Save', saving: 'Saving…', saveFailed: 'The changes were not saved and have been retained. Check whether another page updated these settings.',
+        saving: 'Saving…', saveFailed: 'Could not save automatically. The current settings are shown; please try your change again.',
       },
     }
+    const limitField = 'teamRequestLimit'
+    const limitDebounceMs = 350
+    const isLimit = text => /^\d+$/.test(text) && Number.isSafeInteger(Number(text)) && Number(text) >= 1
     const specs = [...fields, ...legacyModelFields].map(field => ({
       field,
       format: value => value === undefined ? '' : String(value),
       parse(text) {
         if (text === '') return { kind: 'clear' }
         if (field === 'modelSource') return ['conversation', 'settings', 'all'].includes(text) ? { kind: 'set', value: text } : undefined
-        if (field === 'teamRequestLimit') {
-          const value = Number(text)
-          return Number.isSafeInteger(value) && value >= 1 ? { kind: 'set', value } : undefined
-        }
+        if (field === limitField) return isLimit(text) ? { kind: 'set', value: Number(text) } : undefined
         return text === 'true' || text === 'false' ? { kind: 'set', value: text === 'true' } : undefined
       },
     }))
@@ -49,6 +49,7 @@ window.__ModuleLoader__.load({
       const { t } = props
       const state = props.useNativeCollabForm(value => value)
       if (props.view === 'summary') return t('description')
+      if (!state.available) return h('p', { role: 'status', style: hintStyle }, t('unavailable'))
       const disabled = !state.writable || state.saving
       const reset = field => state[field].overridden ? h('button', {
         type: 'button', disabled, onClick: () => props.resetField(field),
@@ -77,40 +78,85 @@ window.__ModuleLoader__.load({
             }, ...['conversation', 'settings', 'all'].map(value => h('option', { key: value, value }, t(value))))),
           h('p', { style: hintStyle }, t(`${field}Hint`)), reset(field))
       })
-      return h(SettingsForm, {
-        state, labels: Object.fromEntries(['unavailable', 'readOnly', 'saveFailed', 'save', 'saving'].map(key => [key, t(key)])),
-        onSave: props.save, onDiscard: props.discard,
-      }, h('div', { style: { display: 'grid', gap: 24 } }, ...controls))
+      const status = !state.writable ? 'readOnly' : state.saving ? 'saving' : state.failed ? 'saveFailed' : null
+      return h('div', { style: { display: 'grid', gap: 12 } },
+        h('div', { style: { display: 'grid', gap: 24 } }, ...controls),
+        h('div', { role: 'status' }, status ? h('p', { style: hintStyle }, t(status)) : null))
     }
     return {
       inject: ['slots', 'locale', 'configForms'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(locale, dictionaries))
-        const form = new SettingsFormModel(ctx.configForms.get(namespace), specs)
-        const store = form.bind(() => {
+        const scope = ctx.configForms.get(namespace)
+        const form = new SettingsFormModel(scope, specs)
+        const original = form.actions()
+        let limitDraft, timer, failed = false, disposed = false
+        const project = () => {
           const source = form.field('modelSource')
           const enabled = form.field('modelEnhancement')
           const compatibility = form.field('nativeModelSelectionCompatibility')
-          return { ...form.shell(), teamRequestLimit: form.field('teamRequestLimit'), disableWaitAgent: form.field('disableWaitAgent'), modelSource: {
+          const limit = form.field(limitField)
+          const draft = limitDraft && { text: limitDraft.text, invalid: !isLimit(limitDraft.text) }
+          return { ...form.shell(), failed, teamRequestLimit: { ...limit, ...draft }, disableWaitAgent: form.field('disableWaitAgent'), modelSource: {
             ...source,
             text: enabled.text === 'false' ? 'conversation' : source.text || (compatibility.text === 'false' ? 'settings' : 'conversation'),
             overridden: source.overridden || enabled.overridden || compatibility.overridden,
           } }
-        })
-        const original = form.actions()
+        }
+        const store = form.bind(project)
+        const publish = () => { if (!disposed) store.set(project()) }
+        const canWrite = () => {
+          const { available, writable, saving } = form.shell()
+          return !disposed && available && writable && !saving
+        }
+        async function commit(stage) {
+          if (!canWrite()) return
+          failed = false
+          clearTimeout(timer)
+          if (limitDraft && isLimit(limitDraft.text)) {
+            // An intervening document write must not overwrite a newer setting.
+            if (scope.getSnapshot().revision === limitDraft.revision) original.edit(limitField, String(Number(limitDraft.text)))
+            else failed = true
+            limitDraft = undefined
+          }
+          stage?.()
+          await form.save()
+          if (disposed) return
+          failed ||= form.shell().failed
+          original.discard()
+          publish()
+        }
         const actions = {
-          ...original,
           edit(field, text) {
-            original.edit(field, text)
-            // Saving a chosen mode supersedes the old master switch and fallback.
-            if (field === 'modelSource') for (const legacy of legacyModelFields) original.edit(legacy, 'true')
+            if (!canWrite()) return
+            if (field === limitField) {
+              clearTimeout(timer)
+              failed = false
+              limitDraft = { text, revision: limitDraft && isLimit(limitDraft.text) ? limitDraft.revision : scope.getSnapshot().revision }
+              if (isLimit(text)) timer = setTimeout(commit, limitDebounceMs)
+              publish()
+              return
+            }
+            void commit(() => {
+              original.edit(field, text)
+              // Saving a chosen mode supersedes the old master switch and fallback.
+              if (field === 'modelSource') for (const legacy of legacyModelFields) original.edit(legacy, 'true')
+            })
           },
           resetField(field) {
-            original.resetField(field)
-            if (field === 'modelSource') for (const legacy of legacyModelFields) original.resetField(legacy)
+            if (!canWrite()) return
+            if (field === limitField) limitDraft = undefined
+            void commit(() => {
+              original.resetField(field)
+              if (field === 'modelSource') for (const legacy of legacyModelFields) original.resetField(legacy)
+            })
           },
         }
-        ctx.effect(() => () => form.dispose())
+        ctx.effect(() => () => {
+          disposed = true
+          clearTimeout(timer)
+          form.dispose()
+        })
         ctx.effect(() => ctx.configForms.whileServed([namespace], () => ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
           name: 'plugins.bundle.config', key: '@sieuno/dsh-native-collab', locale,
           inject: () => ({ hooks: { nativeCollabForm: store }, ...actions }),

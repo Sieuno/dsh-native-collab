@@ -29,7 +29,6 @@ const primitivesRoot = dirname(sdk.resolve('@deepseek-ai/dsh-client-ui-primitive
 const source = path => import(pathToFileURL(resolve(primitivesRoot, 'src', path)).href)
 const primitives = {
   ...(await source('settings-form/form-model.ts')),
-  ...(await source('settings-form/SettingsForm.tsx')),
   ...(await source('settings-form/fields.tsx')),
   ...(await source('Switch.tsx')),
 }
@@ -57,8 +56,11 @@ async function bench(t, { writable = true, reject = false, config = {} } = {}) {
       return true
     },
   }
-  let factory
+  let factory, nextTimer = 0
+  const timers = new Map()
   vm.runInNewContext(readFileSync('dist/client.js', 'utf8'), {
+    setTimeout(callback, delay) { assert.equal(delay, 350); timers.set(++nextTimer, callback); return nextTimer },
+    clearTimeout(timer) { timers.delete(timer) },
     window: { __ModuleLoader__: { load(module) { assert.equal(module.id, '@sieuno/dsh-native-collab'); factory = module.factory } } },
   })
   const client = factory(name => {
@@ -85,8 +87,13 @@ async function bench(t, { writable = true, reject = false, config = {} } = {}) {
     assert.ok(Object.hasOwn(dictionaries[language], key), `Missing locale key: ${key}`)
     return dictionaries[language][key]
   }, useNativeCollabForm: select => select(face.hooks.nativeCollabForm.getSnapshot()) })
-  const controls = () => registration.component(props()).props.children.props.children
+  const controls = () => registration.component(props()).props.children[0].props.children
   return { native, face, writes, controls, dictionaries, scope,
+    advanceRevision() { revision++; for (const listener of listeners) listener() },
+    flushNumber: async () => {
+      for (const [id, callback] of timers) { timers.delete(id); void callback() }
+      await settled()
+    },
     state: () => face.hooks.nativeCollabForm.getSnapshot(),
     markup: language => renderToStaticMarkup(React.createElement(registration.component, props(language))),
     withdraw() { served = false; for (const listener of listeners) listener(); withdraw() },
@@ -111,22 +118,27 @@ test('bundle settings default to the official model policy and keep the wait too
     assert.doesNotMatch(html, /Automatic \(default|自动（|native-collab-modelEnhancement|native-collab-delegationGuidance|native-collab-communicationEnhancement/)
     assert.match(html, /value="all"/)
     assert.match(html, /value="32"/)
+    assert.doesNotMatch(html, /<button[^>]*>(?:Save|保存)<\/button>/)
+    assert.equal(b.face.save, undefined)
   }
   b.withdraw()
   assert.equal(b.registered(), undefined)
   assert.equal(b.state().available, false)
 })
 
-test('model and limit controls stage edits, save through the native Loader, and affect subsequent calls', async t => {
+test('model and limit controls autosave through the native Loader and affect subsequent calls', async t => {
   const b = await bench(t)
   const uid = b.native.entry.fiber.uid
   const controls = b.controls()
   controls[0].props.children[0].props.children[1].props.onChange({ target: { value: 'all' } })
-  controls[1].props.onEdit('2')
-  assert.equal(b.writes.length, 0)
-  b.face.save()
   await settled()
-  await b.native.entry.fiber.await()
+  assert.equal(b.writes.length, 1)
+  assert.equal(b.native.entry.options.config.modelSource, 'all')
+  controls[1].props.onEdit('1')
+  controls[1].props.onEdit('2')
+  assert.equal(b.writes.length, 1)
+  await b.flushNumber()
+  assert.equal(b.writes.length, 2)
   assert.equal(b.state().failed, false)
   assert.equal(b.state().dirty, false)
   assert.equal(b.native.entry.fiber.uid, uid)
@@ -136,11 +148,11 @@ test('model and limit controls stage edits, save through the native Loader, and 
   for (let i = 0; i < 2; i++) assert.equal((await b.native.call('send_message', { agent: 'child', message: 'test' })).isError, false)
   assert.equal((await b.native.call('send_message', { agent: 'child', message: 'limit' })).isError, true)
   b.face.resetField('teamRequestLimit')
-  b.face.save(); await settled()
+  await settled()
   assert.equal(b.state().teamRequestLimit.text, '32')
 })
 
-test('saving the wait switch revokes prior tool admission and reset restores the default', async t => {
+test('changing the wait switch immediately revokes prior tool admission and reset restores the default', async t => {
   const b = await bench(t)
   const { ctx, parent, entry } = b.native
   const uid = entry.fiber.uid
@@ -149,8 +161,8 @@ test('saving the wait switch revokes prior tool admission and reset restores the
   t.after(() => before.dispose())
   assert.ok(ctx.tools.executable('wait_agent', parent, before))
   b.controls()[2].props.children[0].props.children[1].props.onChange(true)
-  assert.ok(ctx.tools.executable('wait_agent', parent, before))
-  b.face.save(); await settled()
+  assert.equal(b.writes.length, 1)
+  await settled()
   assert.equal(entry.fiber.uid, uid)
   assert.equal(entry.options.config.disableWaitAgent, true)
   assert.match(b.markup('en'), /role="switch" aria-checked="true"/)
@@ -161,28 +173,53 @@ test('saving the wait switch revokes prior tool admission and reset restores the
   t.after(() => disabled.dispose())
   assert.ok(!ctx.tools.schemas(parent, disabled).some(tool => tool.name === 'wait_agent'))
   assert.ok(ctx.tools.executable('send_message', parent, disabled))
-  b.face.resetField('disableWaitAgent'); b.face.save(); await settled()
+  b.face.resetField('disableWaitAgent'); await settled()
   assert.match(b.markup('en'), /role="switch" aria-checked="false"/)
   assert.ok(ctx.tools.executable('wait_agent', parent))
 })
 
-test('invalid limits, read-only forms, and rejected saves keep the accepted settings intact', async t => {
-  const b = await bench(t, { reject: true })
-  for (const value of ['0', '-1', '1.5', '9007199254740992', 'no']) {
-    b.face.edit('teamRequestLimit', value); b.face.save(); await settled()
-    assert.equal(b.state().invalid, true)
+test('an invalid limit never writes and does not block another setting', async t => {
+  const b = await bench(t)
+  for (const value of ['0', '-1', '1.5', '9007199254740992', 'no', '']) {
+    b.face.edit('teamRequestLimit', value); await b.flushNumber()
+    assert.equal(b.state().teamRequestLimit.invalid, true)
     assert.equal(b.writes.length, 0)
   }
-  b.face.edit('teamRequestLimit', '9'); b.face.save(); await settled()
+  b.face.edit('disableWaitAgent', 'true'); await settled()
+  assert.equal(b.native.entry.options.config.disableWaitAgent, true)
+  b.face.edit('teamRequestLimit', '9'); await b.flushNumber()
+  assert.equal(b.native.entry.options.config.teamRequestLimit, 9)
+})
+
+test('read-only forms never write', async t => {
+  const b = await bench(t, { writable: false })
+  assert.match(b.markup('en'), /These settings are read-only/)
+  b.face.edit('modelSource', 'all'); await settled()
+  assert.equal(b.writes.length, 0)
+})
+
+test('rejected autosaves restore the accepted settings and explain the failure', async t => {
+  const b = await bench(t, { reject: true })
+  b.face.edit('teamRequestLimit', '9'); await b.flushNumber()
+  assert.equal(b.writes.length, 1)
   assert.equal(b.state().failed, true)
-  assert.equal(b.state().teamRequestLimit.text, '9')
-  assert.equal(b.native.entry.options.config.teamRequestLimit, undefined)
-  b.face.discard()
+  assert.match(b.markup('en'), /Could not save automatically/)
   assert.equal(b.state().teamRequestLimit.text, '32')
-  const readOnly = await bench(t, { writable: false })
-  assert.match(readOnly.markup('en'), /These settings are read-only/)
-  readOnly.face.edit('modelSource', 'all'); readOnly.face.save(); await settled()
-  assert.equal(readOnly.writes.length, 0)
+  assert.equal(b.native.entry.options.config.teamRequestLimit, undefined)
+})
+
+test('a debounced limit does not overwrite a newer document revision or write after withdrawal', async t => {
+  const b = await bench(t)
+  b.face.edit('teamRequestLimit', '9')
+  b.advanceRevision()
+  await b.flushNumber()
+  assert.equal(b.writes.length, 0)
+  assert.equal(b.state().failed, true)
+  assert.equal(b.state().teamRequestLimit.text, '32')
+  b.face.edit('teamRequestLimit', '8')
+  b.withdraw()
+  await b.flushNumber()
+  assert.equal(b.writes.length, 0)
 })
 
 test('legacy model settings display their effective source and a new selection supersedes the retired switch', async t => {
@@ -195,11 +232,11 @@ test('legacy model settings display their effective source and a new selection s
     assert.equal(b.state().modelSource.text, expected)
     assert.match(b.markup('en'), new RegExp(`value="${expected}" selected=""`))
     b.controls()[0].props.children[0].props.children[1].props.onChange({ target: { value: 'all' } })
-    b.face.save(); await settled()
+    await settled()
     assert.equal(b.state().modelSource.text, 'all')
     assert.equal(b.state().failed, false)
     assert.equal((await b.native.call('subagent', { description: 'Test', prompt: 'Test', provider: 'mock', model: 'extra' })).isError, false)
-    b.face.resetField('modelSource'); b.face.save(); await settled()
+    b.face.resetField('modelSource'); await settled()
     assert.equal(b.state().modelSource.text, 'conversation')
     assert.equal(b.state().modelSource.overridden, false)
     assert.equal(b.native.entry.options.config.modelSource, undefined)

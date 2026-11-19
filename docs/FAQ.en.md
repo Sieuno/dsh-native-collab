@@ -10,7 +10,7 @@ Instead of replacing or duplicating these official services, this plugin embrace
 
 Go to **Plugins → Installed** and open this plugin's detail page to access the settings form (featuring "Subagent model source", "Automatic wake message limit", and "Disable the agent wait tool").
 
-The form uses official UI components and the configuration service. After adjusting options, click **Save** at the bottom; changes take effect immediately on subsequent tool calls. This replaces the legacy field-by-field autosave that was prone to concurrent save conflicts.
+Selections and switches save immediately; the message limit saves after you pause typing a valid number. Once saved, changes apply to subsequent tool calls.
 
 > [!NOTE]
 > Enabling or disabling the entire plugin still requires a full restart of the DSH instance for that Profile.

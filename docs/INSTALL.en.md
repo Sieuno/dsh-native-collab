@@ -25,7 +25,7 @@ After installing, enabling, or disabling the plugin, **fully close and restart t
 To disable the plugin, turn off the package's master switch and restart the Profile, rather than disabling individual internal components.
 
 #### 3. Configuration & Usage
-After restarting, open this plugin's detail page under Plugins → Installed. The form contains "Subagent model source", "Automatic wake message limit", and "Disable the agent wait tool". Model source defaults to "Official default policy". Click Save to apply changes to subsequent tool calls immediately.
+After restarting, open this plugin's detail page under Plugins → Installed. The form contains "Subagent model source", "Automatic wake message limit", and "Disable the agent wait tool". Model source defaults to "Official default policy". Changes are saved automatically and apply to subsequent tool calls.
 > [!NOTE]
 > Subagent maximum depth, concurrency limits, Team mode, and task boards are managed directly via official native controls.
 

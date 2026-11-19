@@ -92,7 +92,7 @@ dsh plugin --profile <profile> add /path/to/sieuno-dsh-native-collab-0.4.1.tgz
 ### Activation & Workflow
 
 1. **Restart Profile**: Restart the same Profile normally after installing, enabling, or disabling the plugin (refreshing the web browser is not a service restart).
-2. **Plugin Settings Form**: Open this plugin's detail page under Plugins → Installed to configure "Subagent model source", "Automatic wake message limit", and "Disable the agent wait tool". Click Save to apply changes to subsequent tool calls immediately.
+2. **Plugin Settings Form**: Open this plugin's detail page under Plugins → Installed to configure "Subagent model source", "Automatic wake message limit", and "Disable the agent wait tool". Changes are saved automatically and apply to subsequent tool calls.
 3. **Native Runtime Limits**: Maximum recursion depth, concurrency limits, Team mode toggles, and task boards are configured directly through official host settings.
 4. **Disabling the plugin**: Use the package's main switch and restart the same Profile rather than disabling only its internal component.
 

@@ -3,7 +3,7 @@
 This plugin provides subagent model-source selection, a shared automatic message allowance, optional wait-tool control, and improved delegation prompts.
 
 ### Configuration & Applying Changes
-Adjust the options below and click Save. Changes apply to subsequent calls.
+Changes save automatically and apply to subsequent calls. The message limit saves only after a valid number is entered.
 
 ### Subagent Model Source
 
